@@ -8,12 +8,42 @@ Usage:
     python tools/selfplay.py [plies] [depth]
 """
 
+import os
 import subprocess
 import sys
 
 import chess
 
-EXE = r"F:\chess\01-learning-engine\target\release\aurora-engine.exe"
+
+def find_engine() -> str:
+    """Locate the compiled engine for whatever platform we are running on.
+
+    Windows wants .exe under target\\release, Linux and macOS want a plain
+    binary under target/release. Hardcoding one of them makes this script
+    unusable in CI.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base = os.path.join(root, "01-learning-engine", "target")
+    if os.name == "nt":
+        candidates = [
+            os.path.join(base, "release", "aurora-engine.exe"),
+            os.path.join(base, "debug", "aurora-engine.exe"),
+        ]
+    else:
+        candidates = [
+            os.path.join(base, "release", "aurora-engine"),
+            os.path.join(base, "debug", "aurora-engine"),
+        ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    raise SystemExit(
+        "engine binary not found, tried:\n  " + "\n  ".join(candidates)
+        + "\nbuild it with:  cargo build --release --manifest-path 01-learning-engine/Cargo.toml"
+    )
+
+
+EXE = find_engine()
 
 
 class Uci:
