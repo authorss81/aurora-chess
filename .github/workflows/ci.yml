@@ -111,6 +111,12 @@ jobs:
         with:
           python-version: '3.11'
 
+      # selfplay.py uses python-chess purely as an independent referee: it
+      # checks that every move the engine emits is legal in the position it was
+      # actually given. It is never used to decide anything.
+      - name: Install python-chess
+        run: pip install chess
+
       - name: Build engine
         run: cargo build --manifest-path 01-learning-engine/Cargo.toml --release
 
