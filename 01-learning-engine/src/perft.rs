@@ -39,11 +39,7 @@ pub fn perft_divide(b: &mut Board, depth: u8) -> u64 {
     for i in 0..moves.count {
         let m = moves.moves[i];
         let undo = b.make_move(m);
-        let n = if depth <= 1 {
-            1
-        } else {
-            perft(b, depth - 1)
-        };
+        let n = if depth <= 1 { 1 } else { perft(b, depth - 1) };
         // Echo the resulting position. When a divide line is off, pasting this
         // FEN into `aurora legal <fen>` lets you inspect that node directly
         // instead of replaying the whole line by hand.

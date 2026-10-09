@@ -44,12 +44,12 @@ fn build() -> AttackTables {
     // Pawn diagonals, expressed as (file_delta, rank_delta).
     // A White pawn advances toward rank index 7, so both diagonals go UP:
     //   up-left  = (-1, +1), up-right = (+1, +1)
-// A Black pawn advances toward rank index 0, so both diagonals go DOWN:
-//   down-left  = (-1, -1), down-right = (+1, -1)
-// Getting the sign wrong on one of these makes is_attacked report phantom
+    // A Black pawn advances toward rank index 0, so both diagonals go DOWN:
+    //   down-left  = (-1, -1), down-right = (+1, -1)
+    // Getting the sign wrong on one of these makes is_attacked report phantom
     // checks, which silently deletes legal moves.
-let white_pawn: [(i8, i8); 2] = [(-1, 1), (1, 1)];
-let black_pawn: [(i8, i8); 2] = [(-1, -1), (1, -1)];
+    let white_pawn: [(i8, i8); 2] = [(-1, 1), (1, 1)];
+    let black_pawn: [(i8, i8); 2] = [(-1, -1), (1, -1)];
 
     for sq in 0..64u8 {
         let f = file_of(sq) as i8;
@@ -59,7 +59,7 @@ let black_pawn: [(i8, i8); 2] = [(-1, -1), (1, -1)];
         for (df, dr) in knight_deltas.iter() {
             let nf = f + df;
             let nr = r + dr;
-            if nf >= 0 && nf < 8 && nr >= 0 && nr < 8 {
+            if (0..8).contains(&nf) && (0..8).contains(&nr) {
                 nb |= bit(make_sq(nf as u8, nr as u8));
             }
         }
@@ -69,7 +69,7 @@ let black_pawn: [(i8, i8); 2] = [(-1, -1), (1, -1)];
         for (df, dr) in king_deltas.iter() {
             let nf = f + df;
             let nr = r + dr;
-            if nf >= 0 && nf < 8 && nr >= 0 && nr < 8 {
+            if (0..8).contains(&nf) && (0..8).contains(&nr) {
                 kb |= bit(make_sq(nf as u8, nr as u8));
             }
         }
@@ -79,7 +79,7 @@ let black_pawn: [(i8, i8); 2] = [(-1, -1), (1, -1)];
         for (df, dr) in white_pawn.iter() {
             let nf = f + df;
             let nr = r + dr;
-            if nf >= 0 && nf < 8 && nr >= 0 && nr < 8 {
+            if (0..8).contains(&nf) && (0..8).contains(&nr) {
                 pb |= bit(make_sq(nf as u8, nr as u8));
             }
         }
@@ -89,7 +89,7 @@ let black_pawn: [(i8, i8); 2] = [(-1, -1), (1, -1)];
         for (df, dr) in black_pawn.iter() {
             let nf = f + df;
             let nr = r + dr;
-            if nf >= 0 && nf < 8 && nr >= 0 && nr < 8 {
+            if (0..8).contains(&nf) && (0..8).contains(&nr) {
                 pb |= bit(make_sq(nf as u8, nr as u8));
             }
         }
@@ -166,7 +166,7 @@ fn sliding(sq: u8, occ: Bitboard, diagonal: bool) -> Bitboard {
         loop {
             f += df;
             r += dr;
-            if f < 0 || f > 7 || r < 0 || r > 7 {
+            if !(0..=7).contains(&f) || !(0..=7).contains(&r) {
                 break;
             }
             let s = make_sq(f as u8, r as u8);

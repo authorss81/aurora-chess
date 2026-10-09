@@ -85,19 +85,18 @@ impl Board {
 
     #[inline]
     pub fn king_sq(&self, c: Color) -> u8 {
-        let bb = if c.is_white() { self.bb[WK] } else { self.bb[BK] };
+        let bb = if c.is_white() {
+            self.bb[WK]
+        } else {
+            self.bb[BK]
+        };
         bb.trailing_zeros() as u8
     }
 
     #[inline]
     pub fn piece_at(&self, sq: u8) -> Option<usize> {
         let mask = bit(sq);
-        for p in 0..12 {
-            if self.bb[p] & mask != 0 {
-                return Some(p);
-            }
-        }
-        None
+        (0..12).find(|&p| self.bb[p] & mask != 0)
     }
 
     /// True when the square holds an enemy piece (used for capture detection).
@@ -359,23 +358,31 @@ impl Board {
         self.hash ^= z.piece[placed][to as usize];
 
         // --- castling also moves the rook ---
-    // The coordinates must follow the colour. Hardcoding the White squares here
-    // means Black's castle silently teleports White's rook instead of Black's,
-    // which perft catches as a large deficit two plies later.
-    match flag {
-        FLAG_CASTLE_K | FLAG_CASTLE_Q => {
-            let (rf, rt) = if flag == FLAG_CASTLE_K {
-                if us.is_white() { (7u8, 5u8) } else { (63u8, 61u8) }
-            } else {
-                if us.is_white() { (0u8, 3u8) } else { (56u8, 59u8) }
-            };
-            let rook = if us.is_white() { WR } else { BR };
-            self.bb[rook] &= !bit(rf);
-            self.bb[rook] |= bit(rt);
-            self.hash ^= z.piece[rook][rf as usize] ^ z.piece[rook][rt as usize];
+        // The coordinates must follow the colour. Hardcoding the White squares here
+        // means Black's castle silently teleports White's rook instead of Black's,
+        // which perft catches as a large deficit two plies later.
+        match flag {
+            FLAG_CASTLE_K | FLAG_CASTLE_Q => {
+                let (rf, rt) = if flag == FLAG_CASTLE_K {
+                    if us.is_white() {
+                        (7u8, 5u8)
+                    } else {
+                        (63u8, 61u8)
+                    }
+                } else {
+                    if us.is_white() {
+                        (0u8, 3u8)
+                    } else {
+                        (56u8, 59u8)
+                    }
+                };
+                let rook = if us.is_white() { WR } else { BR };
+                self.bb[rook] &= !bit(rf);
+                self.bb[rook] |= bit(rt);
+                self.hash ^= z.piece[rook][rf as usize] ^ z.piece[rook][rt as usize];
+            }
+            _ => {}
         }
-        _ => {}
-    }
 
         // --- set the en passant square after a double push ---
         if flag == FLAG_DOUBLE {
@@ -398,10 +405,7 @@ impl Board {
         self.stm = them;
         self.hash ^= z.stm;
 
-        Undo {
-            captured,
-            ..undo
-        }
+        Undo { captured, ..undo }
     }
 
     pub fn unmake_move(&mut self, undo: Undo) {
@@ -432,9 +436,17 @@ impl Board {
         self.bb[placed] &= !bit(to);
         if flag == FLAG_CASTLE_K || flag == FLAG_CASTLE_Q {
             let (rook_to, rook_from) = if flag == FLAG_CASTLE_K {
-                if us.is_white() { (5u8, 7u8) } else { (61u8, 63u8) }
+                if us.is_white() {
+                    (5u8, 7u8)
+                } else {
+                    (61u8, 63u8)
+                }
             } else {
-                if us.is_white() { (3u8, 0u8) } else { (59u8, 56u8) }
+                if us.is_white() {
+                    (3u8, 0u8)
+                } else {
+                    (59u8, 56u8)
+                }
             };
             let rook = if us.is_white() { WR } else { BR };
             self.bb[rook] &= !bit(rook_to);
@@ -517,8 +529,7 @@ mod tests {
 
     #[test]
     fn castling_rights_lost_when_king_moves() {
-        let mut b =
-            Board::from_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1").unwrap();
+        let mut b = Board::from_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1").unwrap();
         assert_eq!(b.castling, CASTLE_WK | CASTLE_WQ | CASTLE_BK | CASTLE_BQ);
         let undo = b.make_move(Move::new(4, 5, 0, FLAG_QUIET));
         assert_eq!(
@@ -548,10 +559,7 @@ mod tests {
         );
         b.unmake_move(undo);
         assert_ne!(b.castling & CASTLE_BK, 0);
-        assert_eq!(
-            b.castling,
-            CASTLE_WK | CASTLE_WQ | CASTLE_BK | CASTLE_BQ
-        );
+        assert_eq!(b.castling, CASTLE_WK | CASTLE_WQ | CASTLE_BK | CASTLE_BQ);
     }
 
     #[test]
@@ -575,7 +583,8 @@ mod tests {
 
     #[test]
     fn halfmove_clock_rules() {
-        let mut b = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        let mut b =
+            Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
         // a quiet move increments, a pawn move resets
         let u1 = b.make_move(Move::new(6, 21, 0, FLAG_QUIET)); // Nf3
         assert_eq!(b.half, 1);

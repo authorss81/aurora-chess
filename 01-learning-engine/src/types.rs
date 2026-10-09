@@ -174,9 +174,7 @@ pub struct Move(pub u32);
 impl Move {
     #[inline]
     pub fn new(from: u8, to: u8, promo: u8, flag: u32) -> Move {
-        Move(
-            (from as u32) | ((to as u32) << 6) | ((promo as u32) << 12) | (flag << 16),
-        )
+        Move((from as u32) | ((to as u32) << 6) | ((promo as u32) << 12) | (flag << 16))
     }
 
     #[inline(always)]
@@ -235,7 +233,11 @@ impl Move {
 
     // Long algebraic / UCI text form, eg "e2e4", "a7a8q"
     pub fn uci(self) -> String {
-        let mut s = format!("{}{}", square_name(self.from_sq()), square_name(self.to_sq()));
+        let mut s = format!(
+            "{}{}",
+            square_name(self.from_sq()),
+            square_name(self.to_sq())
+        );
         if self.promo() != 0 {
             s.push(['?', 'n', 'b', 'r', 'q'][self.promo() as usize]);
         }

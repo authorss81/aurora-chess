@@ -24,6 +24,12 @@ pub struct Engine {
     skill: u8,
 }
 
+impl Default for Engine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Engine {
     pub fn new() -> Engine {
         Engine {

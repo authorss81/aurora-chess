@@ -50,7 +50,7 @@ impl TranspositionTable {
     /// rounded down to a power of two so indexing is a mask, not a modulo.
     pub fn new(mb: usize) -> Self {
         let mb = mb.clamp(1, 4096);
-        let mut count = (mb * 1024 * 1024 / std::mem::size_of::<Entry>()).max(1024);
+        let count = (mb * 1024 * 1024 / std::mem::size_of::<Entry>()).max(1024);
         // round down to a power of two
         let mut pow2 = 1024usize;
         while pow2 * 2 <= count {
@@ -83,6 +83,12 @@ impl TranspositionTable {
         self.entries.len()
     }
 
+    /// The table is preallocated once and never shrinks, so this is always
+    /// false. It exists only so `len` and `is_empty` are not a broken pair.
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+
     #[inline(always)]
     pub fn probe(&self, key: u64) -> &Entry {
         &self.entries[self.index(key)]
@@ -101,14 +107,7 @@ impl TranspositionTable {
     }
 
     #[inline(always)]
-    pub fn store(
-        &mut self,
-        key: u64,
-        depth: i8,
-        flag: u8,
-        score: i16,
-        move_: Option<Move>,
-    ) {
+    pub fn store(&mut self, key: u64, depth: i8, flag: u8, score: i16, move_: Option<Move>) {
         let idx = self.index(key);
         let existing = self.entries[idx];
 
@@ -193,7 +192,11 @@ mod tests {
         let mut tt = TranspositionTable::new(1);
         tt.store(777, 12, FLAG_EXACT, 100, None);
         tt.store(777, 4, FLAG_LOWER, 5, None);
-        assert_eq!(tt.probe(777).depth, 12, "shallower search must not clobber deeper");
+        assert_eq!(
+            tt.probe(777).depth,
+            12,
+            "shallower search must not clobber deeper"
+        );
     }
 
     #[test]

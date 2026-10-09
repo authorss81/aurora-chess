@@ -79,15 +79,15 @@ pub fn is_attacked(b: &Board, sq: u8, by: Color) -> bool {
     // bishops / queens on diagonals.
     // The slider set is built with OR, never overwritten: a colour that has a
     // queen but no bishop must still keep its queen.
-    let diag_sliders = b.bb[if by.is_white() { WB } else { BB }]
-        | b.bb[if by.is_white() { WQ } else { BQ }];
+    let diag_sliders =
+        b.bb[if by.is_white() { WB } else { BB }] | b.bb[if by.is_white() { WQ } else { BQ }];
     if diag_sliders != 0 && bishop_attacks(sq, occ) & diag_sliders != 0 {
         return true;
     }
 
     // rooks / queens on ranks and files
-    let ortho_sliders = b.bb[if by.is_white() { WR } else { BR }]
-        | b.bb[if by.is_white() { WQ } else { BQ }];
+    let ortho_sliders =
+        b.bb[if by.is_white() { WR } else { BR }] | b.bb[if by.is_white() { WQ } else { BQ }];
     if ortho_sliders != 0 && rook_attacks(sq, occ) & ortho_sliders != 0 {
         return true;
     }
@@ -204,10 +204,30 @@ fn gen_pawn_moves(
 fn push_pawn(list: &mut MoveList, from: u8, to: u8, promo_rank: u8, capture: bool) {
     if rank_of(to) == promo_rank {
         // all four promotion pieces, under-promotions included
-        list.push(Move::new(from, to, 4, if capture { FLAG_CAPTURE } else { FLAG_QUIET })); // Q
-        list.push(Move::new(from, to, 3, if capture { FLAG_CAPTURE } else { FLAG_QUIET })); // R
-        list.push(Move::new(from, to, 2, if capture { FLAG_CAPTURE } else { FLAG_QUIET })); // B
-        list.push(Move::new(from, to, 1, if capture { FLAG_CAPTURE } else { FLAG_QUIET })); // N
+        list.push(Move::new(
+            from,
+            to,
+            4,
+            if capture { FLAG_CAPTURE } else { FLAG_QUIET },
+        )); // Q
+        list.push(Move::new(
+            from,
+            to,
+            3,
+            if capture { FLAG_CAPTURE } else { FLAG_QUIET },
+        )); // R
+        list.push(Move::new(
+            from,
+            to,
+            2,
+            if capture { FLAG_CAPTURE } else { FLAG_QUIET },
+        )); // B
+        list.push(Move::new(
+            from,
+            to,
+            1,
+            if capture { FLAG_CAPTURE } else { FLAG_QUIET },
+        )); // N
     } else {
         list.push(Move::new(
             from,
@@ -445,8 +465,9 @@ mod tests {
     #[test]
     fn kiwipete_legal_and_pseudo_differ() {
         // pins and checks mean the legality filter has real work to do
-        let b = Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
-            .unwrap();
+        let b =
+            Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
+                .unwrap();
         let mut pseudo = MoveList::new();
         gen_pseudo(&b, &mut pseudo);
         let legal = gen_legal(&b);
@@ -526,7 +547,10 @@ mod tests {
         let b = Board::from_fen("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3")
             .unwrap();
         assert!(in_check(&b, Color(WHITE)));
-        assert!(!has_legal_moves(&b), "checkmate must leave zero legal moves");
+        assert!(
+            !has_legal_moves(&b),
+            "checkmate must leave zero legal moves"
+        );
     }
 
     #[test]
@@ -535,6 +559,9 @@ mod tests {
         // Kh8 has no legal move but is not in check: that is stalemate.
         let b = Board::from_fen("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1").unwrap();
         assert!(!in_check(&b, Color(BLACK)));
-        assert!(!has_legal_moves(&b), "stalemate must leave zero legal moves");
+        assert!(
+            !has_legal_moves(&b),
+            "stalemate must leave zero legal moves"
+        );
     }
 }

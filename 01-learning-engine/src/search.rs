@@ -92,13 +92,18 @@ fn mvv_lva(b: &Board, m: Move) -> i32 {
     if !m.is_capture() {
         return 0;
     }
-    let victim = b.piece_at(m.to_sq()).map(|p| PIECE_VALUE[p % 6]).unwrap_or(0);
-    let attacker = b.piece_at(m.from_sq()).map(|p| PIECE_VALUE[p % 6]).unwrap_or(0);
+    let victim = b
+        .piece_at(m.to_sq())
+        .map(|p| PIECE_VALUE[p % 6])
+        .unwrap_or(0);
+    let attacker = b
+        .piece_at(m.from_sq())
+        .map(|p| PIECE_VALUE[p % 6])
+        .unwrap_or(0);
     victim * 10 - attacker
 }
 
 const PIECE_VALUE: [i32; 6] = [100, 320, 330, 500, 900, 0];
-
 
 /// A cheap static exchange evaluation.
 ///
@@ -154,23 +159,24 @@ fn attackers_to(b: &Board, sq: u8, by: Color) -> Vec<usize> {
 
     let pawns = b.bb[if by.is_white() { WP } else { BP }];
     if crate::attacks::pawn_attacks_by(by, sq) & pawns != 0 {
-        out.push((if by.is_white() { WP } else { BP }) as usize);
+        out.push(if by.is_white() { WP } else { BP });
     }
 
     let knights = b.bb[if by.is_white() { WN } else { BN }];
     let mut n = knight_attacks(sq) & knights;
     while n != 0 {
         let _ = n.trailing_zeros();
-        out.push((if by.is_white() { WN } else { BN }) as usize);
+        out.push(if by.is_white() { WN } else { BN });
         n &= n - 1;
     }
 
     let king = b.bb[if by.is_white() { WK } else { BK }];
     if king_attacks(sq) & king != 0 {
-        out.push((if by.is_white() { WK } else { BK }) as usize);
+        out.push(if by.is_white() { WK } else { BK });
     }
 
-    let bishops = b.bb[if by.is_white() { WB } else { BB }] | b.bb[if by.is_white() { WQ } else { BQ }];
+    let bishops =
+        b.bb[if by.is_white() { WB } else { BB }] | b.bb[if by.is_white() { WQ } else { BQ }];
     let mut d = bishop_attacks(sq, occ) & bishops;
     while d != 0 {
         let s = d.trailing_zeros() as u8;
@@ -180,7 +186,8 @@ fn attackers_to(b: &Board, sq: u8, by: Color) -> Vec<usize> {
         }
     }
 
-    let rooks = b.bb[if by.is_white() { WR } else { BR }] | b.bb[if by.is_white() { WQ } else { BQ }];
+    let rooks =
+        b.bb[if by.is_white() { WR } else { BR }] | b.bb[if by.is_white() { WQ } else { BQ }];
     let mut r = rook_attacks(sq, occ) & rooks;
     while r != 0 {
         let s = r.trailing_zeros() as u8;
@@ -246,8 +253,8 @@ impl Ctx {
     fn order(&self, b: &Board, list: &mut MoveList) {
         // insertion-free approach: score into a scratch buffer, then write back
         let mut scores = [0i32; MAX_MOVES];
-        for i in 0..list.count {
-            scores[i] = self.score(b, list.moves[i], 0);
+        for (i, m) in list.moves.iter().enumerate().take(list.count) {
+            scores[i] = self.score(b, *m, 0);
         }
         for i in 0..list.count {
             let mut best = i;
@@ -288,6 +295,10 @@ fn has_non_pawn_material(b: &Board, c: Color) -> bool {
 }
 
 /// Negamax: N(node) = max over children of ( -N(child) ). Eq (15).
+// Eight parameters is unusual, but a recursive chess search legitimately needs
+// all of them: the position, the window, the depth, the distance from the root,
+// the ordering context and the table, plus a slot to report the root move.
+#[allow(clippy::too_many_arguments)]
 pub fn search(
     b: &Board,
     mut alpha: i32,
@@ -316,7 +327,11 @@ pub fn search(
     {
         let e = tt.probe(b.hash);
         if e.key == b.hash && e.flag != FLAG_NONE {
-            tt_best = if e.move_ != 0 { Some(Move(e.move_ as u32)) } else { None };
+            tt_best = if e.move_ != 0 {
+                Some(Move(e.move_ as u32))
+            } else {
+                None
+            };
             if e.depth >= depth as i8 && ply > 0 {
                 let s = score_from_tt(e.score, ply);
                 match e.flag {
@@ -335,11 +350,7 @@ pub fn search(
     // ---- null-move pruning, Chapter 14.1 ----
     // "If I can pass and still fail high, the best real move fails higher."
     // Never in check, and never when we have only pawns (zugzwang, Figure 19.7).
-    if !in_check
-        && depth >= 3
-        && has_non_pawn_material(b, b.stm)
-        && ply > 0
-        && evaluate(b) >= beta
+    if !in_check && depth >= 3 && has_non_pawn_material(b, b.stm) && ply > 0 && evaluate(b) >= beta
     {
         let mut nb = b.clone();
         nb.make_null();
@@ -525,14 +536,10 @@ pub fn search(
 
 /// Quiescence: keep resolving captures so the leaf evaluation is not taken
 /// halfway through an exchange. Chapter 7.3.
-fn quiescence(
-    b: &Board,
-    mut alpha: i32,
-    beta: i32,
-    ply: u8,
-    ctx: &mut Ctx,
-    qply: u8,
-) -> i32 {
+// `ctx` is threaded through so quiescence can share the move-ordering history
+// if captures are ever ordered with it; today it only recurses.
+#[allow(clippy::only_used_in_recursion)]
+fn quiescence(b: &Board, mut alpha: i32, beta: i32, ply: u8, ctx: &mut Ctx, qply: u8) -> i32 {
     if ply >= 120 || qply >= MAX_QPLY {
         // Too deep to keep chasing captures: trust the static evaluation.
         return evaluate(b);
@@ -550,7 +557,7 @@ fn quiescence(
         }
         let list = gen_legal(b);
         let us = b.stm;
-        let them = us.flip();
+        let _them = us.flip();
         let mut best = -MATE - 1;
         for i in 0..list.count {
             let mut child = b.clone();
@@ -733,7 +740,7 @@ pub fn think(
                 child.unmake_move(undo);
                 scored.push((m, s));
             }
-            scored.sort_by(|a, b| b.1.cmp(&a.1));
+            scored.sort_by_key(|&(_, s)| std::cmp::Reverse(s));
             if !scored.is_empty() {
                 // Pick randomly among moves within `allowed_error` of the best.
                 let best_s = scored[0].1;
@@ -744,7 +751,11 @@ pub fn think(
                         .filter(|(_, (_, s))| best_s - s <= allowed_error)
                         .map(|(i, _)| i)
                         .collect();
-                    if window.is_empty() { 0 } else { window[pseudo_random() % window.len()] }
+                    if window.is_empty() {
+                        0
+                    } else {
+                        window[pseudo_random() % window.len()]
+                    }
                 } else {
                     0
                 };
@@ -820,7 +831,7 @@ pub fn time_budget(
         return 0; // "go infinite" or fixed depth
     }
     let base = if movestogo > 0 {
-        my_time / movestogo
+        my_time / movestogo.max(1)
     } else {
         my_time / 30
     };
@@ -848,7 +859,11 @@ mod tests {
         let mut tt = fresh();
         let (m, score, _) = think(&b, 4, 0, &mut tt, 0);
         assert_eq!(m.uci(), "e1e8", "expected Re8#, got {}", m.uci());
-        assert!(score > MATE_IN_MAX, "should be reported as mate, got {}", score);
+        assert!(
+            score > MATE_IN_MAX,
+            "should be reported as mate, got {}",
+            score
+        );
     }
 
     #[test]
@@ -875,8 +890,9 @@ mod tests {
 
     #[test]
     fn transposition_table_does_not_change_the_move() {
-        let b = Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
-            .unwrap();
+        let b =
+            Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
+                .unwrap();
         let mut t1 = fresh();
         let mut t2 = fresh();
         let no_tt = think(&b, 4, 0, &mut t1, 0);

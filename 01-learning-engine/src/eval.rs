@@ -9,142 +9,88 @@ use crate::types::*;
 // through flip_rank().
 
 const MG_KNIGHT: [i32; 64] = [
-    -50, -40, -30, -30, -30, -30, -40, -50,
-    -40, -20, 0, 0, 5, 0, -20, -40,
-    -30, 0, 10, 15, 15, 10, 0, -30,
-    -30, 5, 15, 20, 20, 15, 5, -30,
-    -30, 0, 15, 20, 20, 15, 0, -30,
-    -30, 5, 10, 15, 15, 10, 5, -30,
-    -40, -20, 0, 5, 5, 0, -20, -40,
-    -50, -40, -30, -30, -30, -30, -40, -50,
+    -50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0, 0, 5, 0, -20, -40, -30, 0, 10, 15, 15, 10,
+    0, -30, -30, 5, 15, 20, 20, 15, 5, -30, -30, 0, 15, 20, 20, 15, 0, -30, -30, 5, 10, 15, 15, 10,
+    5, -30, -40, -20, 0, 5, 5, 0, -20, -40, -50, -40, -30, -30, -30, -30, -40, -50,
 ];
 
 const EG_KNIGHT: [i32; 64] = [
-    -50, -40, -30, -30, -30, -30, -40, -50,
-    -40, -20, 0, 0, 0, 0, -20, -40,
-    -30, 0, 10, 15, 15, 10, 0, -30,
-    -30, 5, 15, 20, 20, 15, 5, -30,
-    -30, 0, 15, 20, 20, 15, 0, -30,
-    -30, 5, 10, 15, 15, 10, 5, -30,
-    -40, -20, 0, 0, 0, 0, -20, -40,
-    -50, -40, -30, -30, -30, -30, -40, -50,
+    -50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0, 0, 0, 0, -20, -40, -30, 0, 10, 15, 15, 10,
+    0, -30, -30, 5, 15, 20, 20, 15, 5, -30, -30, 0, 15, 20, 20, 15, 0, -30, -30, 5, 10, 15, 15, 10,
+    5, -30, -40, -20, 0, 0, 0, 0, -20, -40, -50, -40, -30, -30, -30, -30, -40, -50,
 ];
 
 // The king tables are deliberately opposite. In the middlegame a king wants to
 // be tucked into a corner behind its pawns; in the endgame it wants to walk to
 // the centre. Tapered blending reconciles the two.
 const MG_KING: [i32; 64] = [
-    20, 30, 10, 0, 0, 10, 30, 20,
-    20, 20, 0, 0, 0, 0, 20, 20,
-    -10, -20, -20, -30, -30, -20, -20, -10,
-    -20, -30, -30, -40, -40, -30, -30, -20,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
+    20, 30, 10, 0, 0, 10, 30, 20, 20, 20, 0, 0, 0, 0, 20, 20, -10, -20, -20, -30, -30, -20, -20,
+    -10, -20, -30, -30, -40, -40, -30, -30, -20, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40,
+    -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50,
+    -40, -40, -30,
 ];
 
 const EG_KING: [i32; 64] = [
-    -50, -30, -30, -30, -30, -30, -30, -50,
-    -30, -10, 0, 10, 10, 0, -10, -30,
-    -30, -10, 20, 30, 30, 20, -10, -30,
-    -30, -10, 30, 40, 40, 30, -10, -30,
-    -30, -10, 30, 40, 40, 30, -10, -30,
-    -30, -10, 20, 30, 30, 20, -10, -30,
-    -30, -20, 0, 0, 0, 0, -20, -30,
-    -50, -30, -30, -30, -30, -30, -30, -50,
+    -50, -30, -30, -30, -30, -30, -30, -50, -30, -10, 0, 10, 10, 0, -10, -30, -30, -10, 20, 30, 30,
+    20, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10,
+    20, 30, 30, 20, -10, -30, -30, -20, 0, 0, 0, 0, -20, -30, -50, -30, -30, -30, -30, -30, -30,
+    -50,
 ];
 
 const MG_PAWN: [i32; 64] = [
-    0, 0, 0, 0, 0, 0, 0, 0,
-    5, 10, 10, -20, -20, 10, 10, 5,
-    5, -5, -10, 0, 0, -10, -5, 5,
-    0, 0, 0, 20, 20, 0, 0, 0,
-    5, 5, 10, 25, 25, 10, 5, 5,
-    10, 10, 20, 30, 30, 20, 10, 10,
-    50, 50, 50, 50, 50, 50, 50, 50,
-    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 10, -20, -20, 10, 10, 5, 5, -5, -10, 0, 0, -10, -5, 5, 0, 0, 0,
+    20, 20, 0, 0, 0, 5, 5, 10, 25, 25, 10, 5, 5, 10, 10, 20, 30, 30, 20, 10, 10, 50, 50, 50, 50,
+    50, 50, 50, 50, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 const EG_PAWN: [i32; 64] = [
-    0, 0, 0, 0, 0, 0, 0, 0,
-    90, 90, 90, 90, 90, 90, 90, 90,
-    60, 60, 60, 60, 60, 60, 60, 60,
-    35, 35, 35, 35, 35, 35, 35, 35,
-    20, 20, 20, 20, 20, 20, 20, 20,
-    10, 10, 10, 10, 10, 10, 10, 10,
-    5, 5, 5, 5, 5, 5, 5, 5,
-    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 90, 90, 90, 90, 90, 90, 90, 90, 60, 60, 60, 60, 60, 60, 60, 60, 35, 35,
+    35, 35, 35, 35, 35, 35, 20, 20, 20, 20, 20, 20, 20, 20, 10, 10, 10, 10, 10, 10, 10, 10, 5, 5,
+    5, 5, 5, 5, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 const MG_BISHOP: [i32; 64] = [
-    -20, -10, -10, -10, -10, -10, -10, -20,
-    -10, 5, 0, 0, 0, 0, 5, -10,
-    -10, 10, 10, 10, 10, 10, 10, -10,
-    -10, 0, 10, 10, 10, 10, 0, -10,
-    -10, 5, 5, 10, 10, 5, 5, -10,
-    -10, 0, 5, 10, 10, 5, 0, -10,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -20, -10, -10, -10, -10, -10, -10, -20,
+    -20, -10, -10, -10, -10, -10, -10, -20, -10, 5, 0, 0, 0, 0, 5, -10, -10, 10, 10, 10, 10, 10,
+    10, -10, -10, 0, 10, 10, 10, 10, 0, -10, -10, 5, 5, 10, 10, 5, 5, -10, -10, 0, 5, 10, 10, 5, 0,
+    -10, -10, 0, 0, 0, 0, 0, 0, -10, -20, -10, -10, -10, -10, -10, -10, -20,
 ];
 
 const EG_BISHOP: [i32; 64] = [
-    -10, -10, -10, -10, -10, -10, -10, -10,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -10, 0, 5, 10, 10, 5, 0, -10,
-    -10, 5, 5, 10, 10, 5, 5, -10,
-    -10, 0, 10, 10, 10, 10, 0, -10,
-    -10, 10, 10, 10, 10, 10, 10, -10,
-    -10, 5, 0, 0, 0, 0, 5, -10,
-    -10, -10, -10, -10, -10, -10, -10, -10,
+    -10, -10, -10, -10, -10, -10, -10, -10, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 10, 10, 5, 0,
+    -10, -10, 5, 5, 10, 10, 5, 5, -10, -10, 0, 10, 10, 10, 10, 0, -10, -10, 10, 10, 10, 10, 10, 10,
+    -10, -10, 5, 0, 0, 0, 0, 5, -10, -10, -10, -10, -10, -10, -10, -10, -10,
 ];
 
 const MG_ROOK: [i32; 64] = [
-    0, 0, 0, 0, 0, 0, 0, 0,
-    5, 10, 10, 10, 10, 10, 10, 5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    0, 0, 0, 5, 5, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 10, 10, 10, 10, 10, 5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0,
+    0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, 0, 0,
+    0, 5, 5, 0, 0, 0,
 ];
 
 const EG_ROOK: [i32; 64] = [
-    0, 0, 0, 0, 0, 0, 0, 0,
-    5, 5, 5, 5, 5, 5, 5, 5,
-    10, 10, 10, 10, 10, 10, 10, 10,
-    15, 15, 15, 15, 15, 15, 15, 15,
-    20, 20, 20, 20, 20, 20, 20, 20,
-    25, 25, 25, 25, 25, 25, 25, 25,
-    30, 30, 30, 30, 30, 30, 30, 30,
-    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 5, 5, 5, 10, 10, 10, 10, 10, 10, 10, 10, 15, 15, 15, 15,
+    15, 15, 15, 15, 20, 20, 20, 20, 20, 20, 20, 20, 25, 25, 25, 25, 25, 25, 25, 25, 30, 30, 30, 30,
+    30, 30, 30, 30, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 const MG_QUEEN: [i32; 64] = [
-    -20, -10, -10, -5, -5, -10, -10, -20,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -10, 0, 5, 5, 5, 5, 0, -10,
-    -5, 0, 5, 5, 5, 5, 0, -5,
-    0, 0, 5, 5, 5, 5, 0, -5,
-    -10, 5, 5, 5, 5, 5, 0, -10,
-    -10, 0, 5, 0, 0, 0, 0, -10,
-    -20, -10, -10, -5, -5, -10, -10, -20,
+    -20, -10, -10, -5, -5, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 5, 5, 5, 0, -10,
+    -5, 0, 5, 5, 5, 5, 0, -5, 0, 0, 5, 5, 5, 5, 0, -5, -10, 5, 5, 5, 5, 5, 0, -10, -10, 0, 5, 0, 0,
+    0, 0, -10, -20, -10, -10, -5, -5, -10, -10, -20,
 ];
 
 const EG_QUEEN: [i32; 64] = [
-    -20, -10, -10, -5, -5, -10, -10, -20,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -10, 0, 5, 5, 5, 5, 0, -10,
-    -5, 0, 5, 5, 5, 5, 0, -5,
-    -5, 0, 5, 5, 5, 5, 0, -5,
-    -10, 0, 5, 5, 5, 5, 0, -10,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -20, -10, -10, -5, -5, -10, -10, -20,
+    -20, -10, -10, -5, -5, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 5, 5, 5, 0, -10,
+    -5, 0, 5, 5, 5, 5, 0, -5, -5, 0, 5, 5, 5, 5, 0, -5, -10, 0, 5, 5, 5, 5, 0, -10, -10, 0, 0, 0,
+    0, 0, 0, -10, -20, -10, -10, -5, -5, -10, -10, -20,
 ];
 
 fn pst(pt: PieceType, sq: u8, white: bool, endgame: bool) -> i32 {
-    let i = if white { sq as usize } else { flip_rank(sq) as usize };
+    let i = if white {
+        sq as usize
+    } else {
+        flip_rank(sq) as usize
+    };
     match pt {
         PieceType::Pawn => {
             if endgame {
@@ -232,7 +178,11 @@ fn positional(b: &Board, mg: &mut i32) {
             // destroys colour symmetry.
             let own_file = FILE_A << f;
             let fwd = |m: Bitboard| -> Bitboard {
-                if us.is_white() { m << 8 } else { m >> 8 }
+                if us.is_white() {
+                    m << 8
+                } else {
+                    m >> 8
+                }
             };
 
             let mut ahead = fwd(own_file);
@@ -292,7 +242,7 @@ fn positional(b: &Board, mg: &mut i32) {
             };
             for df in [-1i8, 0, 1] {
                 let nf = kf as i8 + df;
-                if nf < 0 || nf > 7 {
+                if !(0..=7).contains(&nf) {
                     continue;
                 }
                 let shield_sq = make_sq(nf as u8, shield_rank);
@@ -394,7 +344,6 @@ pub fn is_insufficient_material(b: &Board) -> bool {
     minors_w <= 1 && minors_b <= 1
 }
 
-
 /// Development helper: print every evaluation term separately.
 /// Useful when the score looks wrong and you need to know which term is guilty.
 pub fn debug_breakdown(b: &Board) -> String {
@@ -405,8 +354,11 @@ pub fn debug_breakdown(b: &Board) -> String {
     let mut phase = 0i32;
 
     for (p, pt) in [
-        (WP, PieceType::Pawn), (WN, PieceType::Knight), (WB, PieceType::Bishop),
-        (WR, PieceType::Rook), (WQ, PieceType::Queen),
+        (WP, PieceType::Pawn),
+        (WN, PieceType::Knight),
+        (WB, PieceType::Bishop),
+        (WR, PieceType::Rook),
+        (WQ, PieceType::Queen),
     ] {
         for (idx, white) in [(p, true), (p + 6, false)] {
             let sign = if white { 1 } else { -1 };
@@ -439,7 +391,12 @@ pub fn debug_breakdown(b: &Board) -> String {
         iso |= (pawns & NOT_FILE_H) >> 1;
         iso |= (pawns & NOT_FILE_A) << 1;
         iso &= pawns;
-        let _ = write!(terms, "  {} isolated: {}\n", if us.is_white() { "White" } else { "Black" }, sign * -13 * iso.count_ones() as i32);
+        let _ = writeln!(
+            terms,
+            "  {} isolated: {}",
+            if us.is_white() { "White" } else { "Black" },
+            sign * -13 * iso.count_ones() as i32
+        );
         let mut passed = 0i32;
         let mut bb = pawns;
         while bb != 0 {
@@ -449,14 +406,27 @@ pub fn debug_breakdown(b: &Board) -> String {
             let own_file = FILE_A << f;
             let fwd = |m: Bitboard| if us.is_white() { m << 8 } else { m >> 8 };
             let mut ahead = fwd(own_file);
-            if f > 0 { ahead |= fwd(FILE_A << (f - 1)); }
-            if f < 7 { ahead |= fwd(FILE_A << (f + 1)); }
+            if f > 0 {
+                ahead |= fwd(FILE_A << (f - 1));
+            }
+            if f < 7 {
+                ahead |= fwd(FILE_A << (f + 1));
+            }
             if them_pawns & ahead == 0 {
-                let adv = if us.is_white() { rank_of(sq) } else { 7 - rank_of(sq) };
+                let adv = if us.is_white() {
+                    rank_of(sq)
+                } else {
+                    7 - rank_of(sq)
+                };
                 passed += sign * (8 + 12 * adv as i32);
             }
         }
-        let _ = write!(terms, "  {} passed:   {}\n", if us.is_white() { "White" } else { "Black" }, passed);
+        let _ = writeln!(
+            terms,
+            "  {} passed:   {}",
+            if us.is_white() { "White" } else { "Black" },
+            passed
+        );
         let rooks = b.bb[if us.is_white() { WR } else { BR }];
         let mut rook_score = 0i32;
         let mut r = rooks;
@@ -468,18 +438,23 @@ pub fn debug_breakdown(b: &Board) -> String {
                 rook_score += sign * if them_pawns & fm == 0 { 18 } else { 9 };
             }
         }
-        let _ = write!(terms, "  {} rooks:    {}\n", if us.is_white() { "White" } else { "Black" }, rook_score);
+        let _ = writeln!(
+            terms,
+            "  {} rooks:    {}",
+            if us.is_white() { "White" } else { "Black" },
+            rook_score
+        );
     }
 
     let phase = phase.min(24);
     let tapered = (mg_mat + mg_pos) * phase + (eg_mat * (24 - phase));
-    let _ = write!(out, "material+PST mg : {}\n", mg_mat);
-    let _ = write!(out, "material+PST eg : {}\n", eg_mat);
-    let _ = write!(out, "positional   mg: {}\n", mg_pos);
-    let _ = write!(out, "{}", terms);
-    let _ = write!(out, "phase           : {}\n", phase);
-    let _ = write!(out, "tapered raw     : {}\n", tapered / 24);
-    let _ = write!(out, "final (stm view): {}\n", evaluate(b));
+    let _ = writeln!(out, "material+PST mg : {}", mg_mat);
+    let _ = writeln!(out, "material+PST eg : {}", eg_mat);
+    let _ = writeln!(out, "positional   mg: {}", mg_pos);
+    let _ = write!(out, "{terms}");
+    let _ = writeln!(out, "phase           : {}", phase);
+    let _ = writeln!(out, "tapered raw     : {}", tapered / 24);
+    let _ = writeln!(out, "final (stm view): {}", evaluate(b));
     out
 }
 
@@ -505,15 +480,13 @@ mod tests {
             "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
         ] {
             let b = Board::from_fen(fen).unwrap();
-            let e = evaluate(&b);
+            let _e = evaluate(&b);
             let mut m = b.clone();
             // Swap colours AND mirror the board vertically. Swapping colours
             // alone is not the right invariant: piece-square tables are read
             // through flip_rank for Black, so the position must be mirrored too.
             for p in 0..6 {
-                let tmp = m.bb[p];
-                m.bb[p] = m.bb[p + 6];
-                m.bb[p + 6] = tmp;
+                m.bb.swap(p, p + 6);
             }
             for p in 0..12 {
                 let mut mirrored = 0u64;
@@ -525,7 +498,11 @@ mod tests {
                 }
                 m.bb[p] = mirrored;
             }
-            m.ep = if m.ep == NO_SQUARE { NO_SQUARE } else { flip_rank(m.ep) };
+            m.ep = if m.ep == NO_SQUARE {
+                NO_SQUARE
+            } else {
+                flip_rank(m.ep)
+            };
             m.stm = m.stm.flip();
             m.recompute_hash();
             // Compare White-relative scores, not side-to-move-relative ones.
@@ -534,7 +511,11 @@ mod tests {
             // two different questions.
             let white_of = |bd: &Board| {
                 let v = evaluate(bd);
-                if bd.stm.is_white() { v } else { -v }
+                if bd.stm.is_white() {
+                    v
+                } else {
+                    -v
+                }
             };
             assert_eq!(
                 white_of(&m),
