@@ -65,26 +65,76 @@ cd 02-fast-app ; node perft-test.mjs            # the JavaScript rules
 python tools\selfplay.py 40 5                   # does it play legal chess?
 ```
 
+## What depth should you use?
+
+**For playing: do not choose a depth. Choose a time.**
+
+Depth is an *output* of iterative deepening, not a control. Setting a fixed
+depth is wrong for three reasons:
+
+1. A depth that takes 0.5s in the middlegame can take 20s in a sharp endgame,
+   because the tree is much narrower there and the engine reaches deeper.
+2. A fixed depth can overrun the clock and forfeit on time.
+3. Depth does not express how strong you want to be.
+
+What the engine does instead is iterative deepening with a clock budget, the
+same as every serious engine:
+
+```
+t = remaining / 30  +  increment * 0.8        (sudden death)
+t = remaining / moves_to_go + increment * 0.8 (with a move counter)
+t is then capped at remaining / 5 so the engine can never flag
+```
+
+Measured on this machine, single thread:
+
+| time control | budget per move | depth reached |
+|---|---|---|
+| 1+0 bullet | 0.02s | about 6 |
+| 3+2 blitz | 2.7s | about 12 |
+| 5+3 (default here) | 3.1s | about 12 |
+| 10+5 rapid | 4.3s | about 13 |
+| 30+20 classical | 17s | about 15 |
+
+**For testing: depth is exactly right.** Perft is depth-bounded by definition,
+and `perft 6` is the movegen gate.
+
+**For choosing an opponent's strength: use Skill Level, not depth.** This is
+Stockfish's solution and the right one. A fixed depth is a bad weakness dial: at
+depth 1 the engine misses everything three plays deep but will still choose its
+own depth-1 "brilliant" move over its depth-1 refutation. Skill Level instead
+narrows the search window so the engine does not *see* the good moves, then picks
+at random among the ones it does see. The GUI difficulty menu sets it directly.
+
+```
+setoption name Skill Level value 0    # random legal moves
+setoption name Skill Level value 20   # full strength
+```
+
 ## Where things stand
 
-**Done.** Correct bitboard movegen proven by perft to depth 6. Tapered classical
-evaluation with pawn structure and king safety. Alpha-beta with quiescence, a
-transposition table, MVV-LVA/killer/history ordering and null-move pruning. Full
-UCI. A GUI with clocks, promotion, eval bar, PGN and FEN. Both the Rust and the
-JavaScript move generators verified against published perft counts.
+**Done.** Bitboard movegen proven by perft to depth 6 (119,060,324 nodes).
+Tapered classical evaluation. Alpha-beta with quiescence, a transposition table,
+MVV-LVA/killer/history ordering, null-move pruning, **principal variation search,
+late move reductions and aspiration windows**. Full UCI with a Skill Level option.
+A browser GUI with clocks, promotion, eval bar, PGN, FEN and two-player mode.
+Both the Rust and the JavaScript move generators verified against published perft
+counts, plus 53 Rust unit tests and 26 JavaScript smoke tests.
 
-**Next.** In the order the roadmap gives:
+LMR and PVS cut depth 11 from 181 million nodes to 290 thousand — a 600x
+reduction, which is the same strength for a hundredth of the time.
 
-1. Late move reductions — the single biggest remaining strength gain
-2. Aspiration windows and principal variation search
-3. Check extensions and SEE pruning
-4. Multi-PV and an eval graph in the GUI
-5. `fastchess` SPRT testing for every change worth more than about 5 Elo
-6. Opening book, Polyglot
-7. A tiny NNUE network from `jw1912/bullet`
+**Next.**
+
+1. Check extensions and SEE pruning
+2. Futility and razoring
+3. Multi-PV and an eval graph in the GUI
+4. `fastchess` SPRT testing for every change worth more than about 5 Elo
+5. Polyglot opening book
+6. A tiny NNUE network from `jw1912/bullet`
 
 ## Machine notes
 
 Athlon 200GE, 2 cores, 8 GB RAM, Windows 10. Everything above was measured on
-it. Perft runs at ~9.8 M nodes/sec, iterative deepening reaches depth 7 in half a
+it: perft runs at ~8.5 M nodes/sec, the search reaches depth 14 in under a
 second, and the GUI is smooth. No upgrade is needed for any of the work above.

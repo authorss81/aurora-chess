@@ -21,6 +21,7 @@ pub struct Engine {
     depth_limit: u8,
     nodes_limit: u64,
     infinite: bool,
+    skill: u8,
 }
 
 impl Engine {
@@ -32,6 +33,7 @@ impl Engine {
             depth_limit: 64,
             nodes_limit: 0,
             infinite: false,
+            skill: 20,
         }
     }
 
@@ -169,14 +171,22 @@ impl Engine {
     fn setoption(&mut self, parts: &[&str]) {
         let joined = parts.join(" ");
         let lower = joined.to_lowercase();
-        if lower.contains("hash") {
+
+        // Order matters: "skill level" contains "skill", and "hash" is a
+        // substring of nothing else, but be explicit anyway.
+        if lower.contains("skill level") {
+            if let Some(v) = extract_value(&lower, "skill level") {
+                self.skill = v.clamp(0, 20) as u8;
+                crate::search::SKILL.store(self.skill as u64, std::sync::atomic::Ordering::Relaxed);
+            }
+        } else if lower.contains("hash") {
             if let Some(v) = extract_value(&lower, "hash") {
                 let mb = v.clamp(1, 4096) as usize;
                 self.tt = TranspositionTable::new(mb);
             }
-        } else if lower.contains("multipv") || lower.contains("threads") {
-            // accepted but single threaded, which is correct for this build
         }
+        // Threads and MultiPV are accepted so GUIs do not complain, but this
+        // build is single threaded and single line.
     }
 }
 
@@ -198,6 +208,7 @@ pub fn run() {
     say("option name Hash type spin default 16 min 1 max 4096");
     say("option name Threads type spin default 1 min 1 max 2");
     say("option name MultiPV type spin default 1 min 1 max 1");
+    say("option name Skill Level type spin default 20 min 0 max 20");
     say("uciok");
 
     let stdin = io::stdin();

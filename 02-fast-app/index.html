@@ -179,11 +179,11 @@
       <div class="row" style="margin-top:10px">
         <label for="levelSel">Difficulty</label>
         <select id="levelSel">
-          <option value="1">Level 1 - beginner (depth 1)</option>
-          <option value="2" selected>Level 2 - casual (depth 2)</option>
-          <option value="3">Level 3 - club (depth 3)</option>
-          <option value="4">Level 4 - strong (depth 4)</option>
-          <option value="5">Level 5 - expert (depth 5)</option>
+          <option value="1">Beginner</option>
+          <option value="5">Casual</option>
+          <option value="10" selected>Club</option>
+          <option value="16">Strong</option>
+          <option value="20">Full strength</option>
         </select>
       </div>
       <div class="row" style="margin-top:10px">
@@ -458,16 +458,23 @@ async function engineMove(){
   stopClock();
   renderBoard();
 
-  const depth = Number($('levelSel').value);
+  const skill = Number($('levelSel').value);
+  // Same budget formula as the engine's own Eq (16): a fraction of the clock
+  // plus most of the increment, so the engine uses its time instead of a
+  // fixed depth it could overrun.
   const key = state.pos.turn > 0 ? 'w' : 'b';
+  const remaining = state.clocks[key];
+  const budget = Math.min(remaining / 5, remaining / 30 + state.clocks.inc * 0.8);
 
   let best = null, score = 0;
   if (state.source === 'rust' && state.rust.available){
-    const r = await askRust(depth);
+    const r = await askRust(skill, budget);
     best = r.move; score = r.score;
   } else {
     setStatus('engine thinking...');
     await new Promise(r => setTimeout(r, 10));
+    // The JavaScript fallback uses depth: a weak opponent is a shallow search.
+    const depth = Math.max(1, Math.min(5, Math.round(skill / 4)));
     const res = think(state.pos, depth, (info) => {
       setStatus(`engine thinking... depth ${info.depth}`);
     });
@@ -494,11 +501,17 @@ function updateEval(score){
 }
 
 // ---------------------------------------------------------------- rust bridge
-async function askRust(depth){
+async function askRust(skill, budgetMs){
   if (!state.rust.available) return { move: null, score: 0 };
+  // Skill Level is the honest weakness dial. Depth is not: at a fixed depth the
+  // engine misses deep tactics but will still pick a depth-1 "brilliant" move
+  // over its own depth-1 refutation. A narrower window makes it miss the good
+  // moves on purpose, which is what a weak opponent should do.
   const cmds = [
+    `ucinewgame`,
+    `setoption name Skill Level value ${skill}`,
     `position fen ${state.pos.fen()}`,
-    `go depth ${depth}`,
+    `go movetime ${Math.max(100, Math.round(budgetMs))}`,
   ];
   await post('/uci', { lines: cmds });
   // read until bestmove
@@ -641,7 +654,7 @@ $('resignBtn').onclick = () => {
 $('tcSel').onchange = newGame;
 $('modeSel').onchange = newGame;
 $('sideSel').onchange = newGame;
-$('levelSel').onchange = () => setStatus(`difficulty: level ${$('levelSel').value}`);
+$('levelSel').onchange = () => setStatus(`difficulty: skill level ${$('levelSel').value} of 20`);
 $('srcSel').onchange = () => {
   const v = $('srcSel').value;
   if (v === 'js'){ state.source = 'js'; $('srcBadge').textContent = 'built-in JavaScript engine'; $('srcBadge').classList.remove('on'); }

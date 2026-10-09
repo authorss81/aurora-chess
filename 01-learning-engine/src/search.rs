@@ -14,12 +14,39 @@ pub static STOP: AtomicBool = AtomicBool::new(false);
 pub static NODES: AtomicU64 = AtomicU64::new(0);
 /// Abort threshold for `go nodes`. Zero means no limit.
 pub static NODES_LIMIT: AtomicU64 = AtomicU64::new(0);
+/// 0 = plays randomly, 20 = full strength. See the note in think().
+pub static SKILL: AtomicU64 = AtomicU64::new(20);
+
+/// xorshift64, so weakness is reproducible within a game but varies between
+/// games. A real RNG would do; this avoids a dependency.
+pub fn pseudo_random() -> usize {
+    use std::sync::atomic::AtomicU64;
+    static STATE: AtomicU64 = AtomicU64::new(0x9E3779B97F4A7C15);
+    let mut x = STATE.load(Ordering::Relaxed);
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    STATE.store(x, Ordering::Relaxed);
+    (x >> 33) as usize
+}
 
 static mut DEADLINE: Option<Instant> = None;
+static mut STARTED: Option<Instant> = None;
+
+/// Elapsed milliseconds since the search began.
+fn elapsed_ms() -> u128 {
+    unsafe {
+        match STARTED {
+            Some(t) => t.elapsed().as_millis(),
+            None => 0,
+        }
+    }
+}
 
 #[inline]
 fn set_deadline(ms: u64) {
     unsafe {
+        STARTED = Some(Instant::now());
         DEADLINE = if ms == 0 {
             None
         } else {
@@ -351,30 +378,107 @@ pub fn search(
     let us = b.stm;
     let them = us.flip();
 
+    let is_pv_node = beta - alpha > 1;
+
     for i in 0..list.count {
         let m = list.moves[i];
 
-        // skip obviously illegal moves cheaply: castling was already validated
         let mut child = b.clone();
         let undo = child.make_move(m);
 
-        // a move that leaves our king en prise is not legal; the move generator
-        // guarantees this, but keep the filter here so the loop is self-contained
-        if is_attacked(&child, child.king_sq(us), them) {
+        // The move generator already guarantees legality, but a castle that is
+        // taken at face value here needs no recheck and every other pseudo-legal
+        // move must leave our own king safe.
+        if !m.is_castle() && is_attacked(&child, child.king_sq(us), them) {
             child.unmake_move(undo);
             continue;
         }
 
-        let score = -search(
-            &child,
-            -beta,
-            -alpha,
-            depth - 1,
-            ply + 1,
-            ctx,
-            &mut *tt,
-            &mut None,
-        );
+        let mut score;
+        let mut reduced = 0u8;
+
+        if i == 0 {
+            // Principal variation: search the first move with the full window.
+            score = -search(
+                &child,
+                -beta,
+                -alpha,
+                depth - 1,
+                ply + 1,
+                ctx,
+                &mut *tt,
+                &mut None,
+            );
+        } else {
+            // ---- late move reductions, Chapter 14.2 ----
+            // Moves late in a well-ordered list are usually bad. Searching them
+            // a few plies shallow costs almost nothing and refines the few that
+            // turn out to be good with a re-search.
+            //
+            // This is the single largest strength gain after move ordering,
+            // typically +80 to +120 Elo, because it lets a small time budget
+            // reach several plies deeper.
+            if depth >= 3
+                && ply > 0
+                && !in_check
+                && !m.is_capture()
+                && !m.is_promo()
+                && ctx.killers[ply as usize][0] != Some(m)
+                && ctx.killers[ply as usize][1] != Some(m)
+            {
+                reduced = 1 + depth / 3 + (i as u8) / 6;
+                if reduced >= depth {
+                    reduced = depth - 1;
+                }
+                if !is_pv_node {
+                    reduced += 1;
+                }
+                if reduced > depth - 1 {
+                    reduced = depth - 1;
+                }
+            }
+
+            // Null-window probe first: does this move beat alpha at all?
+            let probe_depth = depth - 1 - reduced;
+            score = -search(
+                &child,
+                -(alpha + 1),
+                -alpha,
+                probe_depth,
+                ply + 1,
+                ctx,
+                &mut *tt,
+                &mut None,
+            );
+
+            // If the shallow search liked it, verify properly at full depth.
+            if score > alpha && reduced > 0 {
+                score = -search(
+                    &child,
+                    -(alpha + 1),
+                    -alpha,
+                    depth - 1,
+                    ply + 1,
+                    ctx,
+                    &mut *tt,
+                    &mut None,
+                );
+            }
+            // Only now does it earn a real full-window search.
+            if score > alpha && is_pv_node {
+                score = -search(
+                    &child,
+                    -beta,
+                    -alpha,
+                    depth - 1,
+                    ply + 1,
+                    ctx,
+                    &mut *tt,
+                    &mut None,
+                );
+            }
+        }
+
         child.unmake_move(undo);
 
         searched += 1;
@@ -542,13 +646,35 @@ pub fn think(
     let mut best_score = 0i32;
     let mut reached = 0u8;
 
+    // Skill level controls *how weak* the engine plays, which is a different knob
+    // from depth. Depth alone is a poor weakness dial: at depth 1 the engine
+    // misses everything three plies deep but will happily play a depth-1
+    // "brilliant" move over a depth-1 refutation. Stockfish's Skill Level is the
+    // industry answer - shrink the search window so the engine only *sees* good
+    // moves, then pick among them at random.
+    let skill = SKILL.load(Ordering::Relaxed);
+    let allowed_error = (20 - skill.min(20)) as i32 * 12;
+    let pick_randomly = skill < 20;
+
     let mut depth = 1u8;
+    let mut prev_score = 0i32;
     while depth <= max_depth {
         let mut this_root: Option<Move> = None;
-        let score = search(
+        let mut scored: Vec<(Move, i32)> = Vec::new();
+
+        // ---- aspiration window, Chapter 14.3 ----
+        // A narrow window around the previous iteration's score produces far
+        // more cutoffs. If it fails, widen rather than start over.
+        let (alpha0, beta0) = if depth >= 4 && prev_score.abs() < MATE_IN_MAX {
+            (prev_score - 25, prev_score + 25)
+        } else {
+            (-MATE - 1, MATE + 1)
+        };
+
+        let mut score = search(
             b,
-            -MATE - 1,
-            MATE + 1,
+            alpha0.max(-MATE - 1),
+            beta0.min(MATE + 1),
             depth,
             0,
             &mut ctx,
@@ -556,32 +682,92 @@ pub fn think(
             &mut this_root,
         );
 
+        // fail-high or fail-low: re-search with a wider window, twice at most
+        if score <= alpha0 || score >= beta0 {
+            score = search(
+                b,
+                -MATE - 1,
+                MATE + 1,
+                depth,
+                0,
+                &mut ctx,
+                tt,
+                &mut this_root,
+            );
+        }
+
         // Never abandon a move we already have: if the clock stops us mid-iteration
         // we keep the previous depth's answer.
         if STOP.load(Ordering::Relaxed) && depth > 1 {
             break;
-        }
-        if let Some(m) = this_root {
-            best_move = m;
         }
         if nodes_limit != 0 && NODES.load(Ordering::Relaxed) >= nodes_limit {
             reached = depth;
             break;
         }
 
+        // Re-order the root moves by score so the skill picker has a ranked list.
+        if skill < 20 {
+            let mut list = MoveList::new();
+            gen_pseudo(b, &mut list);
+            let us = b.stm;
+            let them = us.flip();
+            for i in 0..list.count {
+                let m = list.moves[i];
+                let mut child = b.clone();
+                let undo = child.make_move(m);
+                if !m.is_castle() && is_attacked(&child, child.king_sq(us), them) {
+                    child.unmake_move(undo);
+                    continue;
+                }
+                let s = -search(
+                    &child,
+                    -MATE - 1,
+                    -MATE + 1 + allowed_error.max(1),
+                    depth - 1,
+                    1,
+                    &mut ctx,
+                    tt,
+                    &mut None,
+                );
+                child.unmake_move(undo);
+                scored.push((m, s));
+            }
+            scored.sort_by(|a, b| b.1.cmp(&a.1));
+            if !scored.is_empty() {
+                // Pick randomly among moves within `allowed_error` of the best.
+                let best_s = scored[0].1;
+                let idx = if pick_randomly && allowed_error > 0 {
+                    let window: Vec<usize> = scored
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, (_, s))| best_s - s <= allowed_error)
+                        .map(|(i, _)| i)
+                        .collect();
+                    if window.is_empty() { 0 } else { window[pseudo_random() % window.len()] }
+                } else {
+                    0
+                };
+                best_move = scored[idx].0;
+            }
+        } else if let Some(m) = this_root {
+            best_move = m;
+        }
+
+        prev_score = score;
         best_score = score;
         reached = depth;
 
         let n = NODES.load(Ordering::Relaxed);
-        let elapsed_ms = time_ms.max(1);
+        let ms: u64 = elapsed_ms().max(1) as u64;
         let pv = best_move.uci();
         println!(
             "info depth {} score {} nodes {} nps {} time {} pv {}",
             depth,
             format_score(score),
             n,
-            n * 1000 / elapsed_ms,
-            elapsed_ms,
+            n * 1000 / ms,
+            ms,
             pv
         );
         use std::io::Write;
@@ -590,7 +776,7 @@ pub fn think(
         if score.abs() > MATE_IN_MAX {
             break; // mate found, no point searching deeper
         }
-        if time_ms != 0 && elapsed_ms * 2 > time_ms {
+        if time_ms != 0 && ms * 2 > time_ms {
             break; // no time for another ply
         }
         depth += 1;

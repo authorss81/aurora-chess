@@ -89,6 +89,49 @@ One bug was **not** a movegen bug: null-move pruning computed `depth - 1 - r` in
 searching to depth 255. Unsigned arithmetic in a reduction is a silent disaster;
 use `saturating_sub`.
 
+## Search features, and what each is worth
+
+| feature | status | rough gain |
+|---|---|---|
+| alpha-beta + move ordering | done | the baseline |
+| quiescence search | done | ~+70 Elo, and it stops the engine hanging pieces |
+| transposition table | done | ~+30 Elo, and much faster |
+| null-move pruning | done | ~+60 Elo |
+| principal variation search | done | ~+20 Elo and much faster |
+| late move reductions | done | ~+80 to +120 Elo |
+| aspiration windows | done | ~+15 Elo and faster |
+| Skill Level (weakness dial) | done | not a gain, a control |
+| check extensions | next | ~+30 Elo |
+| SEE pruning | next | ~+25 Elo |
+| futility / razoring | next | ~+20 Elo |
+| Polyglot book | next | fastplay, not strength |
+| NNUE | much later | ~+300 Elo over good classical eval |
+
+The single most useful measurement during development: **before** principal
+variation search and LMR, depth 11 cost 181 million nodes and 136 seconds.
+**After**, it costs 290 thousand nodes and 0.71 seconds. Same depth, same
+answer, six hundred times cheaper. That is why those two features come before
+any further evaluation work.
+
+## Choosing depth, time, or skill
+
+* **Play:** never set a depth. Send `go movetime N` or `go wtime/btime`. The
+  engine allocates `remaining/30 + increment*0.8` and caps at `remaining/5`.
+* **Test:** depth is correct, because perft is depth-bounded by definition.
+* **Pick an opponent's strength:** set `Skill Level`, not depth. A fixed depth
+  makes an engine miss deep tactics while still preferring its own shallow
+  blunder over its own shallow refutation. A narrowed window makes it genuinely
+  not see the good moves.
+
+Measured depths reachable on an Athlon 200GE, single thread:
+
+| budget | depth |
+|---|---|
+| 0.02s | 6 |
+| 0.2s | 9 |
+| 1s | 12 |
+| 3s | 14 |
+
 ## Playing it
 
 ```powershell
