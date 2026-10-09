@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust engine (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Format check
+        run: cargo fmt --manifest-path 01-learning-engine/Cargo.toml -- --check
+
+      - name: Clippy
+        run: cargo clippy --manifest-path 01-learning-engine/Cargo.toml --all-targets -- -D warnings
+
+      - name: Unit tests
+        run: cargo test --manifest-path 01-learning-engine/Cargo.toml --release
+
+      # The movegen gate. Depth 4 on all six canonical positions is the CI
+      # compromise: it runs in under a second and catches every rule bug that
+      # depth 6 would, only slower.
+      - name: Perft (six canonical positions, depth 4)
+        run: |
+          cd 01-learning-engine
+          cargo run --release -- perft 4 "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+          cargo run --release -- perft 4 "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+          cargo run --release -- perft 4 "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"
+          cargo run --release -- perft 4 "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"
+          cargo run --release -- perft 4 "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"
+          cargo run --release -- perft 4 "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
+
+      - name: Perft depth 5 (startpos and kiwipete)
+        run: |
+          cd 01-learning-engine
+          cargo run --release -- perft 5 "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+          cargo run --release -- perft 5 "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+
+      - name: Upload Linux engine
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-engine-linux
+          path: 01-learning-engine/target/release/aurora-engine
+
+  rust-windows:
+    name: Rust engine (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test
+        run: cargo test --manifest-path 01-learning-engine/Cargo.toml --release
+      - name: Build release
+        run: cargo build --manifest-path 01-learning-engine/Cargo.toml --release
+      - name: Upload Windows engine
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-engine-windows
+          path: 01-learning-engine/target/release/aurora-engine.exe
+
+  javascript:
+    name: GUI rules and engine (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The browser rules layer is held to the same perft standard as the Rust
+      # engine. A GUI that allows an illegal move is worse than no GUI.
+      - name: Perft the JavaScript move generator
+        working-directory: 02-fast-app
+        run: node perft-test.mjs
+
+      - name: Sanity check the JavaScript search
+        working-directory: 02-fast-app
+        run: node smoke-test.mjs
+
+  selfplay:
+    name: Self-play (no illegal moves)
+    runs-on: ubuntu-latest
+    needs: rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build engine
+        run: cargo build --manifest-path 01-learning-engine/Cargo.toml --release
+
+      - name: Play 20 plies and verify every move is legal
+        run: python tools/selfplay.py 20 4
+
+  build-output:
+    name: Release bundle
+    runs-on: windows-latest
+    needs: [rust, rust-windows]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Build
+        run: cargo build --manifest-path 01-learning-engine/Cargo.toml --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release\engine | Out-Null
+          Copy-Item 01-learning-engine\target\release\aurora-engine.exe release\engine\
+          Copy-Item 02-fast-app\chess.js,02-fast-app\engine.js,02-fast-app\index.html,02-fast-app\server.js,02-fast-app\README.md release\
+          Copy-Item artifacts\aurora-engine-linux\aurora-engine release\engine\aurora-engine-linux
+          Copy-Item README.md release\
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurora-chess-release
+          path: release\

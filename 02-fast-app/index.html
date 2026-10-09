@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aurora Chess</title>
+<style>
+  :root{
+    --bg:#14120f; --panel:#1e1b17; --panel2:#272319; --line:#3a332a;
+    --text:#ece5d8; --muted:#a2988a; --accent:#d4a24c; --good:#7fb069;
+    --light:#f0d9b5; --dark:#b58863; --hl:#f5e6a8; --check:#e06c5a;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Iowan Old Style",Georgia,serif;
+    display:flex; justify-content:center; padding:18px;
+  }
+  .app{display:flex; gap:20px; max-width:1200px; width:100%; flex-wrap:wrap}
+
+  /* ---------- board ---------- */
+  .boardwrap{display:flex; gap:12px}
+  .evalbar{
+    width:20px; border-radius:10px; overflow:hidden; position:relative;
+    background:#4a4034; border:1px solid var(--line);
+  }
+  .evalbar .white{position:absolute; bottom:0; left:0; right:0; background:#f4efe4; transition:height .25s}
+  .evalbar .label{
+    position:absolute; bottom:6px; left:50%; transform:translateX(-50%) rotate(-90deg);
+    transform-origin:center; font-size:11px; color:#333; white-space:nowrap; font-family:monospace;
+  }
+  .board{
+    display:grid; grid-template-columns:repeat(8,1fr);
+    width:min(74vw,520px); aspect-ratio:1;
+    border:2px solid var(--line); border-radius:6px; overflow:hidden;
+    box-shadow:0 10px 30px rgba(0,0,0,.5); user-select:none;
+  }
+  .sq{position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer}
+  .sq.light{background:var(--light)} .sq.dark{background:var(--dark)}
+  .sq.last::after{content:''; position:absolute; inset:0; background:var(--hl); opacity:.42}
+  .sq.sel::after{content:''; position:absolute; inset:0; background:#8fd18a; opacity:.5}
+  .sq.check{background:var(--check)!important}
+  .sq .dot{
+    position:absolute; width:26%; height:26%; border-radius:50%;
+    background:rgba(30,60,30,.42); pointer-events:none;
+  }
+  .sq .cap{
+    position:absolute; inset:0; border:5px solid rgba(60,30,30,.4);
+    border-radius:50%; pointer-events:none;
+  }
+  .sq .pc{
+    font-size:min(8.6vw,58px); line-height:1; position:relative; z-index:2;
+    font-family:"Segoe UI Symbol","DejaVu Sans",serif;
+  }
+  .sq .pc.w{color:#fff; text-shadow:0 1px 2px #000, 0 0 1px #000}
+  .sq .pc.b{color:#111; text-shadow:0 1px 1px rgba(255,255,255,.35)}
+  .coord{position:absolute; font-size:10px; font-family:monospace; opacity:.55}
+  .coord.r{bottom:1px; right:3px} .coord.f{bottom:0; left:3px}
+  .sq.light .coord{color:#4a3a20} .sq.dark .coord{color:#e8dcc4}
+
+  /* ---------- side panels ---------- */
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px;
+  }
+  .side{width:300px; display:flex; flex-direction:column; gap:14px}
+
+  .clocks{display:flex; flex-direction:column; gap:8px}
+  .clock{
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:9px 13px;
+  }
+  .clock.active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset}
+  .clock .who{font-size:13px; color:var(--muted)}
+  .clock .tm{font-family:Consolas,monospace; font-size:26px; font-variant-numeric:tabular-nums}
+  .clock.low .tm{color:#e06c5a}
+
+  .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  button{
+    background:var(--panel2); color:var(--text); border:1px solid var(--line);
+    border-radius:7px; padding:8px 13px; cursor:pointer; font-family:inherit; font-size:14px;
+  }
+  button:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
+  button:disabled{opacity:.4; cursor:not-allowed}
+  button.primary{background:var(--accent); color:#1a1512; border-color:var(--accent); font-weight:600}
+  select,input[type=number],input[type=text]{
+    background:var(--panel2); color:var(--text); border:1px solid var(--line);
+    border-radius:6px; padding:7px 9px; font-family:inherit; font-size:14px;
+  }
+  label{font-size:13px; color:var(--muted)}
+
+  .moves{
+    flex:1; min-height:150px; max-height:320px; overflow-y:auto;
+    font-family:Consolas,monospace; font-size:14px; line-height:1.7;
+    background:#14120f; border:1px solid var(--line); border-radius:8px; padding:9px;
+  }
+  .moves .num{color:var(--muted); display:inline-block; width:34px}
+  .moves .san{cursor:pointer; padding:1px 4px; border-radius:4px}
+  .moves .san:hover{background:var(--panel2)}
+  .moves .san.last{background:var(--accent); color:#1a1512}
+
+  .status{font-size:13.5px; color:var(--muted); min-height:20px}
+  .status b{color:var(--accent)}
+  .pv{font-family:Consolas,monospace; font-size:12.5px; color:var(--muted);
+      background:#14120f; border:1px solid var(--line); border-radius:8px; padding:8px; min-height:34px}
+
+  dialog{
+    background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:12px; padding:22px; max-width:520px; width:92%;
+  }
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  .promo-opts{display:flex; gap:10px; margin-top:14px}
+  .promo-opts button{flex:1; font-size:28px; padding:10px}
+  .fenrow{display:flex; gap:8px; margin-top:10px}
+  .fenrow input{flex:1; font-family:Consolas,monospace; font-size:12px}
+  .log{
+    font-family:Consolas,monospace; font-size:11.5px; color:var(--muted);
+    max-height:130px; overflow-y:auto; background:#14120f;
+    border:1px solid var(--line); border-radius:8px; padding:8px;
+  }
+  .badge{
+    display:inline-block; font-size:11px; padding:2px 8px; border-radius:11px;
+    background:var(--panel2); border:1px solid var(--line); color:var(--muted);
+  }
+  .badge.on{background:var(--good); color:#12100e; border-color:var(--good)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="boardwrap">
+    <div class="evalbar" title="evaluation, White at the top">
+      <div class="white" id="evalFill" style="height:50%"></div>
+      <div class="label" id="evalLabel">0.0</div>
+    </div>
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="side">
+    <div class="panel">
+      <div class="clocks">
+        <div class="clock" id="cw">
+          <span class="who" id="cwn">White</span><span class="tm" id="cwt">--:--</span>
+        </div>
+        <div class="clock" id="cb">
+          <span class="who" id="cbn">Black</span><span class="tm" id="cbt">--:--</span>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="newBtn">New game</button>
+        <button id="flipBtn">Flip</button>
+        <button id="undoBtn">Take back</button>
+        <button id="resignBtn">Resign</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="row">
+        <label for="tcSel">Time control</label>
+        <select id="tcSel">
+          <option value="180+2">3+2</option>
+          <option value="300+3" selected>5+3</option>
+          <option value="600+5">10+5</option>
+          <option value="60+0">1+0</option>
+          <option value="1800+10">30+10</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label for="modeSel">Opponent</label>
+        <select id="modeSel">
+          <option value="engine" selected>Play vs engine</option>
+          <option value="human">Two players</option>
+        </select>
+        <select id="sideSel">
+          <option value="white" selected>as White</option>
+          <option value="black">as Black</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label for="levelSel">Difficulty</label>
+        <select id="levelSel">
+          <option value="1">Level 1 - beginner (depth 1)</option>
+          <option value="2" selected>Level 2 - casual (depth 2)</option>
+          <option value="3">Level 3 - club (depth 3)</option>
+          <option value="4">Level 4 - strong (depth 4)</option>
+          <option value="5">Level 5 - expert (depth 5)</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label for="srcSel">Engine source</label>
+        <select id="srcSel">
+          <option value="auto" selected>Auto (Rust if available)</option>
+          <option value="js">Built-in JavaScript</option>
+          <option value="rust">Rust (aurora-engine.exe)</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <span class="badge" id="srcBadge">checking engine...</span>
+      </div>
+    </div>
+
+    <div class="panel" style="display:flex; flex-direction:column; gap:10px">
+      <div class="status" id="status">Ready. Make a move.</div>
+      <div class="moves" id="moves"></div>
+      <div class="pv" id="pv">&nbsp;</div>
+      <div class="row">
+        <button id="pgnBtn">Export PGN</button>
+        <button id="copyBtn">Copy FEN</button>
+        <button id="fenBtn">Load FEN</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="row">
+        <button id="logToggle">Engine log</button>
+      </div>
+      <div class="log" id="log" style="display:none; margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<dialog id="promoDlg">
+  <div style="font-size:17px">Pawn promotes. Choose a piece:</div>
+  <div class="promo-opts">
+    <button data-p="5">Queen</button>
+    <button data-p="4">Rook</button>
+    <button data-p="3">Bishop</button>
+    <button data-p="2">Knight</button>
+  </div>
+</dialog>
+
+<dialog id="fenDlg">
+  <div style="font-size:17px; margin-bottom:10px">Load a position (FEN)</div>
+  <div class="fenrow"><input type="text" id="fenInput" spellcheck="false"></div>
+  <div class="row" style="margin-top:12px">
+    <button class="primary" id="fenLoad">Load</button>
+    <button id="fenCancel">Cancel</button>
+  </div>
+</dialog>
+
+<script type="module">
+import {
+  Position, START_FEN, generateLegal, legalMovesFrom, applyMove,
+  toSan, gameStatus, sqName, sqFromName, makeSq, fileOf, rankOf, EMPTY,
+  inCheck, isInsufficientMaterial,
+} from './chess.js';
+import { think, evaluate } from './engine.js';
+
+const $ = (id) => document.getElementById(id);
+const GLYPH = {
+  1:'\u2659', 2:'\u2658', 3:'\u2657', 4:'\u2656', 5:'\u2655', 6:'\u2654',
+  '-1':'\u265F', '-2':'\u265E', '-3':'\u265D', '-4':'\u265C', '-5':'\u265B', '-6':'\u265A',
+};
+
+// ---------------------------------------------------------------- state
+const state = {
+  pos: new Position(START_FEN),
+  history: [],              // [{san, from, to, fenBefore}]
+  selected: null,
+  legal: [],
+  flipped: false,
+  thinking: false,
+  over: false,
+  clocks: { w: 0, b: 0, inc: 0, base: 0 },
+  lastMove: null,
+  timer: null,
+  source: 'js',             // 'js' | 'rust'
+  rust: { available: false, buffer: [], pos: 0, waiting: false },
+};
+
+// ---------------------------------------------------------------- clocks
+function parseTC(v){
+  const [b, i] = v.split('+').map(Number);
+  return { base: b * 1000, inc: i * 1000 };
+}
+function fmtTime(ms){
+  if (ms < 0) ms = 0;
+  const t = Math.ceil(ms / 1000);
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function startClock(){
+  stopClock();
+  const side = state.pos.turn;
+  state.lastTick = performance.now();
+  state.timer = setInterval(() => {
+    const now = performance.now();
+    const dt = now - state.lastTick;
+    state.lastTick = now;
+    const key = side > 0 ? 'w' : 'b';
+    state.clocks[key] -= dt;
+    if (state.clocks[key] <= 0){
+      state.clocks[key] = 0;
+      stopClock();
+      setStatus(`<b>${side > 0 ? 'White' : 'Black'}</b> flagged on time.`);
+      state.over = true;
+    }
+    renderClocks();
+  }, 100);
+}
+function stopClock(){
+  if (state.timer){ clearInterval(state.timer); state.timer = null; }
+}
+function renderClocks(){
+  $('cwt').textContent = fmtTime(state.clocks.w);
+  $('cbt').textContent = fmtTime(state.clocks.b);
+  $('cw').classList.toggle('active', state.pos.turn > 0 && !state.over);
+  $('cb').classList.toggle('active', state.pos.turn < 0 && !state.over);
+  $('cw').classList.toggle('low', state.clocks.w < 30000);
+  $('cb').classList.toggle('low', state.clocks.b < 30000);
+}
+
+// ---------------------------------------------------------------- board
+function renderBoard(){
+  const b = $('board');
+  b.innerHTML = '';
+  const order = [];
+  for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++){
+    order.push(state.flipped ? [7 - f, 7 - r] : [f, 7 - r]);
+  }
+  for (const [file, rank] of order){
+    const sq = makeSq(file, rank);
+    const div = document.createElement('div');
+    div.className = 'sq ' + (((file + rank) % 2 === 1) ? 'light' : 'dark');
+    div.dataset.sq = sq;
+
+    const pc = state.pos.board[sq];
+    if (pc !== EMPTY){
+      const el = document.createElement('span');
+      el.className = 'pc ' + (pc > 0 ? 'w' : 'b');
+      el.textContent = GLYPH[pc];
+      div.appendChild(el);
+    }
+
+    if (state.selected !== null && state.legal.some(m => m.from === state.selected && m.to === sq)){
+      const target = state.pos.board[sq];
+      const marker = document.createElement('div');
+      marker.className = (target !== EMPTY || state.selected === sq) ? 'cap' : 'dot';
+      if (target !== EMPTY) marker.className = 'cap';
+      div.appendChild(marker);
+    }
+    if (state.selected === sq) div.classList.add('sel');
+    if (state.lastMove && (sq === state.lastMove.from || sq === state.lastMove.to)) div.classList.add('last');
+
+    div.addEventListener('click', () => onSquareClick(sq));
+    b.appendChild(div);
+  }
+
+  // check highlight: the king of the side to move gets a red square
+  if (inCheck(state.pos, state.pos.turn)){
+    const ksq = state.pos.kingSq(state.pos.turn);
+    const el = b.children[sqIndex(ksq)];
+    if (el) el.classList.add('check');
+  }
+  Array.from(b.children).forEach((el, i) => {
+    const file = i % 8, row = Math.floor(i / 8);
+    if (row === 7){
+      const c = document.createElement('span');
+      c.className = 'coord f';
+      c.textContent = 'abcdefgh'[file];
+      el.appendChild(c);
+    }
+    if (file === 7){
+      const c = document.createElement('span');
+      c.className = 'coord r';
+      c.textContent = String(8 - row);
+      el.appendChild(c);
+    }
+  });
+}
+function sqIndex(sq){
+  const f = fileOf(sq), r = rankOf(sq);
+  return state.flipped ? (7 - f) + (7 - r) * 8 : f + (7 - r) * 8;
+}
+// ---------------------------------------------------------------- moves
+function onSquareClick(sq){
+  if (state.over || state.thinking) return;
+  if ($('modeSel').value === 'engine' && state.pos.turn !== humanSide()) return;
+
+  if (state.selected !== null){
+    const match = state.legal.find(m => m.from === state.selected && m.to === sq);
+    if (match){
+      if (needsPromotion(match)){
+        pendingPromotion = match;
+        $('promoDlg').showModal();
+        return;
+      }
+      commitMove(match);
+      return;
+    }
+  }
+  state.selected = (state.selected === sq) ? null : sq;
+  state.legal = state.selected === null ? [] : legalMovesFrom(state.pos, sq);
+  if (state.selected !== null && state.legal.length === 0) state.selected = null;
+  renderBoard();
+}
+
+let pendingPromotion = null;
+$('promoDlg').querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = Number(btn.dataset.p);
+    $('promoDlg').close();
+    if (pendingPromotion){
+      const m = { ...pendingPromotion, promo: p };
+      pendingPromotion = null;
+      commitMove(m);
+    }
+  });
+});
+
+function needsPromotion(m){
+  return m.promo === 0 &&
+    Math.abs(state.pos.board[m.from]) === 1 &&
+    rankOf(m.to) === (state.pos.turn > 0 ? 7 : 0);
+}
+
+function humanSide(){
+  if ($('modeSel').value === 'human') return null;
+  return $('sideSel').value === 'white' ? 1 : -1;
+}
+
+function commitMove(m){
+  const san = toSan(state.pos, m);
+  const before = state.pos.fen();
+  const next = applyMove(state.pos, m);
+  state.history.push({ san, from: m.from, to: m.to, fenBefore: before });
+  state.pos = next;
+  state.lastMove = { from: m.from, to: m.to };
+  state.selected = null;
+  state.legal = [];
+
+  // clock: the mover banks the increment
+  const key = state.pos.turn > 0 ? 'b' : 'w';
+  state.clocks[key] += state.clocks.inc;
+
+  renderAll();
+
+  const st = gameStatus(state.pos);
+  if (st.over){
+    state.over = true;
+    stopClock();
+    setStatus(`<b>${st.reason}</b> &mdash; result ${st.result}`);
+    return;
+  }
+
+  const hs = humanSide();
+  if (hs === null || state.pos.turn === hs) {
+    startClock();
+  } else {
+    engineMove();
+  }
+}
+
+// ---------------------------------------------------------------- engine
+async function engineMove(){
+  state.thinking = true;
+  stopClock();
+  renderBoard();
+
+  const depth = Number($('levelSel').value);
+  const key = state.pos.turn > 0 ? 'w' : 'b';
+
+  let best = null, score = 0;
+  if (state.source === 'rust' && state.rust.available){
+    const r = await askRust(depth);
+    best = r.move; score = r.score;
+  } else {
+    setStatus('engine thinking...');
+    await new Promise(r => setTimeout(r, 10));
+    const res = think(state.pos, depth, (info) => {
+      setStatus(`engine thinking... depth ${info.depth}`);
+    });
+    best = res.move; score = res.score;
+  }
+
+  updateEval(score);
+  state.thinking = false;
+
+  if (!best){
+    setStatus('<b>no legal move</b>');
+    return;
+  }
+  commitMove(best);
+}
+
+function updateEval(score){
+  if (score === undefined || score === null){ return; }
+  // convert a side-to-move score into White's score
+  const white = state.pos.turn > 0 ? score : -score;
+  const pct = 1 / (1 + Math.pow(10, -white / 400));
+  $('evalFill').style.height = (pct * 100).toFixed(1) + '%';
+  $('evalLabel').textContent = (white / 100).toFixed(2);
+}
+
+// ---------------------------------------------------------------- rust bridge
+async function askRust(depth){
+  if (!state.rust.available) return { move: null, score: 0 };
+  const cmds = [
+    `position fen ${state.pos.fen()}`,
+    `go depth ${depth}`,
+  ];
+  await post('/uci', { lines: cmds });
+  // read until bestmove
+  for (let i = 0; i < 4000; i++){
+    const lines = await get(`/out?since=${state.rust.pos}`);
+    if (lines.length){
+      for (const ln of lines){
+        log(ln);
+        if (ln.startsWith('info depth')){
+          const m = ln.match(/score (cp|mate) (-?\d+)/);
+          if (m) updateEval(Number(m[2]));
+        }
+        if (ln.startsWith('bestmove')){
+          const from = sqFromName(ln.slice(9, 11));
+          const to = sqFromName(ln.slice(11, 13));
+          const promoChar = ln[13];
+          const promo = promoChar ? ({ n:2, b:3, r:4, q:5 })[promoChar] || 0 : 0;
+          const legal = generateLegal(state.pos);
+          const match = legal.find(x => x.from === from && x.to === to && (promo === 0 || x.promo === promo));
+          return { move: match || legal.find(x => x.from === from && x.to === to) || legal[0], score: 0 };
+        }
+      }
+    } else {
+      await new Promise(r => setTimeout(r, 20));
+    }
+  }
+  return { move: null, score: 0 };
+}
+
+async function post(url, body){
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return await r.json();
+  } catch (e){ return null; }
+}
+async function get(url){
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    state.rust.pos = j.pos;
+    return j.lines || [];
+  } catch (e){ return []; }
+}
+function log(s){
+  const el = $('log');
+  el.textContent += (el.textContent ? '\n' : '') + s;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function probeRust(){
+  const info = await get('/engine');
+  if (info && info.ready){
+    state.rust.available = true;
+    state.source = 'rust';
+    $('srcBadge').textContent = 'aurora-engine (Rust)';
+    $('srcBadge').classList.add('on');
+  } else {
+    state.source = 'js';
+    $('srcBadge').textContent = 'built-in JavaScript engine';
+  }
+}
+
+// ---------------------------------------------------------------- render
+function renderAll(){
+  renderBoard();
+  renderClocks();
+  renderMoves();
+}
+
+function renderMoves(){
+  const el = $('moves');
+  if (state.history.length === 0){ el.innerHTML = '<span style="color:#6d6151">no moves yet</span>'; return; }
+  let html = '';
+  state.history.forEach((h, i) => {
+    if (i % 2 === 0) html += `<span class="num">${i / 2 + 1}.</span>`;
+    html += `<span class="san${i === state.history.length - 1 ? ' last' : ''}" data-i="${i}">${h.san}</span> `;
+  });
+  el.innerHTML = html;
+  el.querySelectorAll('.san').forEach(s => {
+    s.addEventListener('click', () => {
+      const i = Number(s.dataset.i);
+      state.history.length = i + 1;
+      state.pos = new Position(state.history[i].fenBefore);
+      state.lastMove = { from: state.history[i].from, to: state.history[i].to };
+      state.over = false;
+      renderAll();
+    });
+  });
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(html){ $('status').innerHTML = html; }
+
+// ---------------------------------------------------------------- controls
+function newGame(){
+  stopClock();
+  const tc = parseTC($('tcSel').value);
+  state.clocks = { w: tc.base, b: tc.base, inc: tc.inc };
+  state.pos = new Position(START_FEN);
+  state.history = [];
+  state.selected = null; state.legal = [];
+  state.lastMove = null; state.over = false; state.thinking = false;
+  $('evalFill').style.height = '50%';
+  $('evalLabel').textContent = '0.00';
+  $('pv').innerHTML = '&nbsp;';
+  renderAll();
+  setStatus('New game. White to move.');
+
+  const hs = humanSide();
+  if (hs === -1) setTimeout(engineMove, 400);
+  else startClock();
+}
+
+$('newBtn').onclick = newGame;
+$('flipBtn').onclick = () => { state.flipped = !state.flipped; renderBoard(); };
+$('undoBtn').onclick = () => {
+  if (state.history.length === 0) return;
+  const take = ($('modeSel').value === 'engine') ? 2 : 1;
+  const back = Math.min(take, state.history.length);
+  state.history.length -= back;
+  const h = state.history[state.history.length - 1];
+  state.pos = new Position(h ? h.fenBefore : START_FEN);
+  state.lastMove = h ? { from: h.from, to: h.to } : null;
+  state.over = false; state.thinking = false;
+  stopClock();
+  renderAll();
+  setStatus('Move taken back.');
+  const hs = humanSide();
+  if (hs === null || state.pos.turn === hs) startClock(); else setTimeout(engineMove, 300);
+};
+$('resignBtn').onclick = () => {
+  const side = humanSide() ?? state.pos.turn;
+  state.over = true; stopClock();
+  setStatus(`<b>resigned</b> &mdash; result ${side > 0 ? '0-1' : '1-0'}`);
+};
+$('tcSel').onchange = newGame;
+$('modeSel').onchange = newGame;
+$('sideSel').onchange = newGame;
+$('levelSel').onchange = () => setStatus(`difficulty: level ${$('levelSel').value}`);
+$('srcSel').onchange = () => {
+  const v = $('srcSel').value;
+  if (v === 'js'){ state.source = 'js'; $('srcBadge').textContent = 'built-in JavaScript engine'; $('srcBadge').classList.remove('on'); }
+  else if (v === 'rust' && state.rust.available){ state.source = 'rust'; $('srcBadge').textContent = 'aurora-engine (Rust)'; $('srcBadge').classList.add('on'); }
+  else setStatus('<b>the Rust engine is not running</b> - start it with: node server.js');
+};
+$('logToggle').onclick = () => {
+  const el = $('log');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+$('pgnBtn').onclick = () => {
+  const pgn = buildPgn();
+  const blob = new Blob([pgn], { type: 'application/x-chess-pgn' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'game.pgn';
+  a.click();
+  setStatus('PGN downloaded.');
+};
+$('copyBtn').onclick = async () => {
+  try { await navigator.clipboard.writeText(state.pos.fen()); setStatus('FEN copied.'); }
+  catch { setStatus('FEN: ' + state.pos.fen()); }
+};
+$('fenBtn').onclick = () => { $('fenInput').value = state.pos.fen(); $('fenDlg').showModal(); };
+$('fenCancel').onclick = () => $('fenDlg').close();
+$('fenLoad').onclick = () => {
+  const fen = $('fenInput').value.trim();
+  try {
+    const p = new Position(fen);
+    p.fen();
+    state.pos = p;
+    state.history = []; state.lastMove = null; state.over = false; state.thinking = false;
+    $('fenDlg').close();
+    renderAll();
+    setStatus('Position loaded.');
+  } catch { setStatus('<b>could not parse that FEN</b>'); }
+};
+
+function buildPgn(){
+  const d = new Date();
+  const iso = d.toISOString().replace(/\.\d+Z$/, 'Z');
+  const st = gameStatus(state.pos);
+  let result = '*';
+  if (st.over) result = st.result;
+  else if (state.over) result = '1-0';
+  const moves = [];
+  state.history.forEach((h, i) => {
+    if (i % 2 === 0) moves.push(`${i / 2 + 1}.`);
+    moves.push(h.san);
+  });
+  if (moves.length) moves.push(result);
+  return [
+    '[Event "Aurora Chess"]',
+    '[Site "local"]',
+    `[Date "${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}"]`,
+    '[Round "-"]',
+    '[White "You"]',
+    '[Black "Aurora"]',
+    `[Result "${result}"]`,
+    '',
+    moves.join(' '),
+    '',
+  ].join('\n');
+}
+
+// drag and drop
+let dragging = null;
+document.addEventListener('dragstart', () => {});
+$('board').addEventListener('mousedown', (e) => {
+  const sq = Number(e.target.closest('.sq')?.dataset.sq);
+  if (!Number.isNaN(sq) && state.pos.board[sq] !== EMPTY && !state.over && !state.thinking){
+    const hs = humanSide();
+    if ($('modeSel').value === 'human' || state.pos.turn === hs){
+      dragging = sq;
+      onSquareClick(sq);
+    }
+  }
+});
+$('board').addEventListener('mouseup', (e) => {
+  if (dragging === null) return;
+  const target = e.target.closest('.sq');
+  const sq = target ? Number(target.dataset.sq) : null;
+  if (sq !== null && sq !== dragging) onSquareClick(sq);
+  dragging = null;
+});
+
+// keyboard: n new game, f flip, u undo
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'n') newGame();
+  if (e.key === 'f') { state.flipped = !state.flipped; renderBoard(); }
+  if (e.key === 'u') $('undoBtn').click();
+});
+
+// ---------------------------------------------------------------- boot
+probeRust().finally(() => newGame());
+setStatus('Loading rules...');
+</script>
+</body>
+</html>

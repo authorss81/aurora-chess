@@ -1,0 +1,38 @@
+# Rust build output
+target/
+**/target/
+*.exe
+*.pdb
+*.ilk
+
+# Node
+node_modules/
+npm-debug.log*
+*.log
+
+# Test scratch files
+in.txt
+out.txt
+err.txt
+server.out
+server.err
+
+# Data and downloads (large, regenerable)
+data/*.binpack
+data/*.bin
+books/*.bin
+tools/stockfish*
+tools/*.exe
+*.nnue
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/

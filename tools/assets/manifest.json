@@ -1,0 +1,97 @@
+[
+  {
+    "id": "startpos",
+    "file": "startpos.svg",
+    "caption": "Start position - 20 moves (16 pawn + 4 knight)"
+  },
+  {
+    "id": "ep-pin",
+    "file": "ep-pin.svg",
+    "caption": "Perft position 3 - en passant pin trap (depth 4 = 43238)"
+  },
+  {
+    "id": "pin-e-file",
+    "file": "pin-e-file.svg",
+    "caption": "Absolute pin: Ke1 / Pe2 / Re8 - pawn cannot move"
+  },
+  {
+    "id": "knight-f3",
+    "file": "knight-f3.svg",
+    "caption": "Knight on f3 attacks 8 squares (bits 36,38,27,31,11,15,4,6)"
+  },
+  {
+    "id": "rook-rays",
+    "file": "rook-rays.svg",
+    "caption": "Sliding attack: rook rays stop at first blocker"
+  },
+  {
+    "id": "castling-safety",
+    "file": "castling-safety.svg",
+    "caption": "Castling requires f1 AND g1 unattacked"
+  },
+  {
+    "id": "promo-choice",
+    "file": "promo-choice.svg",
+    "caption": "Promotion with choice: Q/R/B/N (knight avoids stalemate)"
+  },
+  {
+    "id": "tapered-eval",
+    "file": "tapered-eval.svg",
+    "caption": "King PST opposite: middlegame corner-safe, endgame centre-active"
+  },
+  {
+    "id": "pawn-structure",
+    "file": "pawn-structure.svg",
+    "caption": "Doubled a2/a3, isolated c4, passed e6"
+  },
+  {
+    "id": "queen-mate",
+    "file": "queen-mate.svg",
+    "caption": "Back-rank mate pattern: Qg7# style"
+  },
+  {
+    "id": "fork-knight",
+    "file": "fork-knight.svg",
+    "caption": "Knight fork: attacks king and rook simultaneously"
+  },
+  {
+    "id": "ep-square-rule",
+    "file": "ep-square-rule.svg",
+    "caption": "Passed pawn square rule: pawn queens if king outside the box"
+  },
+  {
+    "id": "najdorf",
+    "file": "najdorf.svg",
+    "caption": "Sicilian Najdorf 1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6"
+  },
+  {
+    "id": "opposition",
+    "file": "opposition.svg",
+    "caption": "King opposition: take it with Kc3"
+  },
+  {
+    "id": "wac-e1",
+    "file": "wac-e1.svg",
+    "caption": "WAC.E01 style: Qg6!! decoy"
+  },
+  {
+    "id": "syzygy-krvk",
+    "file": "syzygy-krvk.svg",
+    "caption": "KR vs K: rook cuts rank, king boxes in (DTM 12)"
+  },
+  {
+    "id": "zugzwang-guard",
+    "file": "zugzwang-guard.svg",
+    "caption": "Zugzwang: never null-move in pawn endgames"
+  },
+  {
+    "id": "discovered-check",
+    "file": "discovered-check.svg",
+    "caption": "Discovered attack: move the blocker, attack opens"
+  },
+  {
+    "id": "zwischenzug",
+    "file": "zwischenzug.svg",
+    "caption": "Zwischenzug (intermediate move) tactic"
+  }
+]
