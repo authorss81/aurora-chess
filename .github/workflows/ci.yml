@@ -213,12 +213,24 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path release\engine | Out-Null
+          # Create every destination first. Copy-Item fails the whole step if the
+          # target directory does not exist, which is a silent-looking way to
+          # lose a release.
+          New-Item -ItemType Directory -Force -Path release\engine  | Out-Null
+          New-Item -ItemType Directory -Force -Path release\web    | Out-Null
+
           Copy-Item 01-learning-engine\target\release\aurora-engine.exe release\engine\
-          Copy-Item 02-fast-app\web\index.html,02-fast-app\web\chess.js,02-fast-app\web\engine.js release\web\
-          Copy-Item 02-fast-app\server.js,02-fast-app\README.md release\
+          Copy-Item 02-fast-app\web\index.html release\web\
+          Copy-Item 02-fast-app\web\chess.js  release\web\
+          Copy-Item 02-fast-app\web\engine.js release\web\
+          Copy-Item 02-fast-app\server.js release\
+          Copy-Item 02-fast-app\README.md  release\
           Copy-Item artifacts\aurora-engine-linux\aurora-engine release\engine\aurora-engine-linux
           Copy-Item README.md release\
+
+          Write-Output "packaged:"
+          Get-ChildItem release -Recurse -File |
+            ForEach-Object { Write-Output ("  {0,8:N0}  {1}" -f $_.Length, $_.FullName.Replace((Get-Location).Path, '.')) }
 
       - uses: actions/upload-artifact@v4
         with:

@@ -54,7 +54,7 @@ impl Engine {
             Ok(c) => c,
             Err(_) => return Vec::new(),
         };
-        let out = match self.out.lock() {
+        let mut out = match self.out.lock() {
             Ok(o) => o,
             Err(_) => return Vec::new(),
         };
@@ -183,8 +183,19 @@ fn spawn_engine(app: &tauri::AppHandle) -> Result<Arc<Engine>, String> {
 }
 
 /// Shared handle so a restart can swap the engine without restarting the window.
-#[derive(Default)]
 pub struct EngineSlot(Arc<Mutex<Option<Arc<Engine>>>>);
+
+impl Default for EngineSlot {
+    fn default() -> Self {
+        EngineSlot(Arc::new(Mutex::new(None)))
+    }
+}
+
+impl EngineSlot {
+    fn new(engine: Option<Arc<Engine>>) -> Self {
+        EngineSlot(Arc::new(Mutex::new(engine)))
+    }
+}
 
 #[tauri::command]
 fn engine_info(app: tauri::AppHandle, slot: State<'_, EngineSlot>) -> serde_json::Value {
@@ -244,11 +255,11 @@ pub fn run() {
             // A missing engine is not fatal: the GUI falls back to its built-in
             // JavaScript search, so report it and carry on.
             let slot = match spawn_engine(&handle) {
-                Ok(engine) => EngineSlot(Some(engine)),
+                Ok(engine) => EngineSlot::new(Some(engine)),
                 Err(e) => {
                     eprintln!("[aurora] {e}");
                     eprintln!("[aurora] falling back to the built-in JavaScript engine");
-                    EngineSlot(None)
+                    EngineSlot::new(None)
                 }
             };
             app.manage(slot);
