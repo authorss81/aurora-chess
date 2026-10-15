@@ -4,11 +4,12 @@ A playable chess application with no build step and no installation. Open it and
 play.
 
 ```
-index.html      the interface
-chess.js        chess rules and move generation (dependency free)
-engine.js       fallback search: negamax + alpha-beta + quiescence
+web/index.html    the interface
+web/chess.js     chess rules and move generation (dependency free)
+web/engine.js    fallback search: negamax + alpha-beta + quiescence
 server.js       optional bridge to the Rust engine
-perft-test.mjs  verifies chess.js against the published perft counts
+web/perft-test.mjs   verifies chess.js against the published perft counts
+src-tauri/       desktop shell: spawns the engine, bundles a Windows installer
 ```
 
 ## Play it
@@ -16,7 +17,7 @@ perft-test.mjs  verifies chess.js against the published perft counts
 ### Option A — open the file directly
 
 ```
-double-click index.html
+double-click web\index.html
 ```
 
 Works immediately with the built-in JavaScript engine. No server, no Rust, no
@@ -62,7 +63,7 @@ Keyboard: `n` new game, `f` flip, `u` take back.
 The GUI's move generator is held to the same standard as the Rust engine:
 
 ```
-node perft-test.mjs
+node web/perft-test.mjs
 ```
 
 ```

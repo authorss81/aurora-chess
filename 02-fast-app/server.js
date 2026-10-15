@@ -24,6 +24,7 @@ const { spawn } = require('child_process');
 
 const PORT = 8420;
 const HERE = __dirname;
+const WEB = path.join(HERE, 'web');   // the isolated web asset folder
 
 // Where to look for the compiled engine, in order of preference.
 const ENGINE_CANDIDATES = [
@@ -138,8 +139,8 @@ const server = http.createServer((req, res) => {
 
   // static files
   let file = url.pathname === '/' ? '/index.html' : url.pathname;
-  const full = path.join(HERE, path.normalize(file).replace(/^([/\\])+/, ''));
-  if (!full.startsWith(HERE)) { res.writeHead(403); return res.end('forbidden'); }
+  const full = path.join(WEB, path.normalize(file).replace(/^([/\\])+/, ''));
+  if (!full.startsWith(WEB)) { res.writeHead(403); return res.end('forbidden'); }
 
   fs.readFile(full, (err, data) => {
     if (err) { res.writeHead(404); return res.end('not found'); }
@@ -153,6 +154,7 @@ server.listen(PORT, () => {
   console.log('  Aurora Chess');
   console.log('  -------------');
   console.log(`  open:  http://localhost:${PORT}`);
+  console.log(`  (or open web\\index.html directly, no server needed)`);
   if (enginePath) {
     console.log(`  engine: ${enginePath}`);
     startEngine();

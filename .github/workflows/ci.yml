@@ -91,12 +91,10 @@ jobs:
       # The browser rules layer is held to the same perft standard as the Rust
       # engine. A GUI that allows an illegal move is worse than no GUI.
       - name: Perft the JavaScript move generator
-        working-directory: 02-fast-app
-        run: node perft-test.mjs
+        run: node 02-fast-app/web/perft-test.mjs
 
       - name: Sanity check the JavaScript search
-        working-directory: 02-fast-app
-        run: node smoke-test.mjs
+        run: node 02-fast-app/web/smoke-test.mjs
 
   selfplay:
     name: Self-play (no illegal moves)
@@ -217,7 +215,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path release\engine | Out-Null
           Copy-Item 01-learning-engine\target\release\aurora-engine.exe release\engine\
-          Copy-Item 02-fast-app\chess.js,02-fast-app\engine.js,02-fast-app\index.html,02-fast-app\server.js,02-fast-app\README.md release\
+          Copy-Item 02-fast-app\web\index.html,02-fast-app\web\chess.js,02-fast-app\web\engine.js release\web\
+          Copy-Item 02-fast-app\server.js,02-fast-app\README.md release\
           Copy-Item artifacts\aurora-engine-linux\aurora-engine release\engine\aurora-engine-linux
           Copy-Item README.md release\
 

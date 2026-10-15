@@ -14,7 +14,7 @@ tools/                board generator, book builders, test harnesses
 ## Start playing — 10 seconds
 
 ```
-open 02-fast-app\index.html
+open 02-fast-app\web\index.html
 ```
 
 Double-click it. It works with no server, no Rust and no network.
@@ -61,7 +61,7 @@ cargo test --release                             # 53 unit tests
 
 pip install chess
 python tools\diff_perft.py --depth 3            # vs an independent engine
-cd 02-fast-app ; node perft-test.mjs            # the JavaScript rules
+cd 02-fast-app ; node web/perft-test.mjs            # the JavaScript rules
 python tools\selfplay.py 40 5                   # does it play legal chess?
 ```
 

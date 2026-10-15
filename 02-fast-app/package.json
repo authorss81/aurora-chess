@@ -8,9 +8,9 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "test:rules": "node perft-test.mjs",
-    "test:smoke": "node smoke-test.mjs",
-    "test": "node perft-test.mjs && node smoke-test.mjs",
+    "test:rules": "node web/perft-test.mjs",
+    "test:smoke": "node web/smoke-test.mjs",
+    "test": "node web/perft-test.mjs && node web/smoke-test.mjs",
     "stage:engine": "node stage-engine.js",
     "desktop:build": "npm run stage:engine && tauri build"
   },
