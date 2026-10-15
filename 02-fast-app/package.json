@@ -1,0 +1,20 @@
+{
+  "name": "aurora-chess",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chess application with an engine written from scratch in Rust",
+  "scripts": {
+    "bridge": "node server.js",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "test:rules": "node perft-test.mjs",
+    "test:smoke": "node smoke-test.mjs",
+    "test": "node perft-test.mjs && node smoke-test.mjs",
+    "stage:engine": "node stage-engine.js",
+    "desktop:build": "npm run stage:engine && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

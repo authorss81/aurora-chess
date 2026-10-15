@@ -30,12 +30,22 @@
     transform-origin:center; font-size:11px; color:#333; white-space:nowrap; font-family:monospace;
   }
   .board{
-    display:grid; grid-template-columns:repeat(8,1fr);
-    width:min(74vw,520px); aspect-ratio:1;
+    display:grid;
+    /* minmax(0,1fr), not 1fr: a plain 1fr track has min-width:auto, so a piece
+       glyph or the capture ring can widen the track and break the 1:1 aspect
+       ratio. Selecting a piece is what makes that happen, which is why the
+       squares only grew after a move. */
+    grid-template-columns:repeat(8, minmax(0, 1fr));
+    grid-template-rows:repeat(8, minmax(0, 1fr));
+    width:min(74vw, 520px);
+    height:min(74vw, 520px);   /* explicit, so nothing can stretch it */
     border:2px solid var(--line); border-radius:6px; overflow:hidden;
     box-shadow:0 10px 30px rgba(0,0,0,.5); user-select:none;
   }
-  .sq{position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer}
+  .sq{
+    position:relative; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; min-width:0; min-height:0; overflow:hidden;
+  }
   .sq.light{background:var(--light)} .sq.dark{background:var(--dark)}
   .sq.last::after{content:''; position:absolute; inset:0; background:var(--hl); opacity:.42}
   .sq.sel::after{content:''; position:absolute; inset:0; background:#8fd18a; opacity:.5}
@@ -45,11 +55,16 @@
     background:rgba(30,60,30,.42); pointer-events:none;
   }
   .sq .cap{
-    position:absolute; inset:0; border:5px solid rgba(60,30,30,.4);
-    border-radius:50%; pointer-events:none;
+    position:absolute; inset:0; border:6px solid rgba(60,30,30,.45);
+    border-radius:50%; pointer-events:none; box-sizing:border-box;
   }
   .sq .pc{
-    font-size:min(8.6vw,58px); line-height:1; position:relative; z-index:2;
+    /* Absolute, so the glyph contributes nothing to layout - that is the second
+       half of the fix. Sized conservatively rather than filling the square:
+       note that a percentage font-size here would resolve against the containing
+       block, not the square, so it must stay absolute-length based. */
+    font-size:min(7.4vw, 48px); line-height:1;
+    position:absolute; z-index:2; pointer-events:none; user-select:none;
     font-family:"Segoe UI Symbol","DejaVu Sans",serif;
   }
   .sq .pc.w{color:#fff; text-shadow:0 1px 2px #000, 0 0 1px #000}
@@ -196,6 +211,7 @@
       </div>
       <div class="row" style="margin-top:10px">
         <span class="badge" id="srcBadge">checking engine...</span>
+        <span class="badge" id="srcLabel">detecting transport</span>
       </div>
     </div>
 
@@ -500,6 +516,44 @@ function updateEval(score){
   $('evalLabel').textContent = (white / 100).toFixed(2);
 }
 
+// ---------------------------------------------------------------- engine link
+// Two ways to reach the engine:
+//   - inside the Tauri desktop app: direct IPC, no Node and no port involved
+//   - in a browser talking to `node server.js`: plain HTTP
+// Both speak the same UCI text; only the transport differs.
+const IN_TAURI = typeof window.__TAURI_INTERNALS__ !== 'undefined'
+              || typeof window.__TAURI__ !== 'undefined';
+
+async function tauriInvoke(cmd, args) {
+  if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+    return window.__TAURI__.core.invoke(cmd, args);
+  }
+  if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+    return window.__TAURI_INTERNALS__.invoke(cmd, args);
+  }
+  throw new Error('tauri ipc unavailable');
+}
+
+async function httpPost(url, body) {
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return await r.json();
+  } catch (e) { return null; }
+}
+
+async function httpGet(url) {
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (typeof j.pos === 'number') state.rust.pos = j.pos;
+    return j.lines || [];
+  } catch (e) { return []; }
+}
+
 // ---------------------------------------------------------------- rust bridge
 async function askRust(skill, budgetMs){
   if (!state.rust.available) return { move: null, score: 0 };
@@ -513,10 +567,18 @@ async function askRust(skill, budgetMs){
     `position fen ${state.pos.fen()}`,
     `go movetime ${Math.max(100, Math.round(budgetMs))}`,
   ];
-  await post('/uci', { lines: cmds });
+  if (IN_TAURI) await tauriInvoke('uci_send', { lines: cmds });
+  else await httpPost('/uci', { lines: cmds });
+
   // read until bestmove
   for (let i = 0; i < 4000; i++){
-    const lines = await get(`/out?since=${state.rust.pos}`);
+    let lines;
+    if (IN_TAURI) {
+      const r = await tauriInvoke('uci_read', {});
+      lines = (r && r.lines) ? r.lines : [];
+    } else {
+      lines = await httpGet(`/out?since=${state.rust.pos}`);
+    }
     if (lines.length){
       for (const ln of lines){
         log(ln);
@@ -541,24 +603,6 @@ async function askRust(skill, budgetMs){
   return { move: null, score: 0 };
 }
 
-async function post(url, body){
-  try {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    return await r.json();
-  } catch (e){ return null; }
-}
-async function get(url){
-  try {
-    const r = await fetch(url);
-    const j = await r.json();
-    state.rust.pos = j.pos;
-    return j.lines || [];
-  } catch (e){ return []; }
-}
 function log(s){
   const el = $('log');
   el.textContent += (el.textContent ? '\n' : '') + s;
@@ -566,7 +610,12 @@ function log(s){
 }
 
 async function probeRust(){
-  const info = await get('/engine');
+  let info = null;
+  if (IN_TAURI) {
+    info = await tauriInvoke('engine_info', {}).catch(() => null);
+  } else {
+    info = await fetch('/engine').then(r => r.json()).catch(() => null);
+  }
   if (info && info.ready){
     state.rust.available = true;
     state.source = 'rust';
@@ -575,6 +624,12 @@ async function probeRust(){
   } else {
     state.source = 'js';
     $('srcBadge').textContent = 'built-in JavaScript engine';
+  }
+  const label = $('srcLabel');
+  if (label) {
+    label.textContent = IN_TAURI
+      ? 'transport: Tauri IPC'
+      : (info && info.ready ? 'transport: HTTP bridge' : 'no bridge detected');
   }
 }
 
@@ -659,6 +714,7 @@ $('srcSel').onchange = () => {
   const v = $('srcSel').value;
   if (v === 'js'){ state.source = 'js'; $('srcBadge').textContent = 'built-in JavaScript engine'; $('srcBadge').classList.remove('on'); }
   else if (v === 'rust' && state.rust.available){ state.source = 'rust'; $('srcBadge').textContent = 'aurora-engine (Rust)'; $('srcBadge').classList.add('on'); }
+  else if (IN_TAURI) setStatus('<b>the Rust engine is not running</b> - check that aurora-engine.exe sits in the engine folder next to the app');
   else setStatus('<b>the Rust engine is not running</b> - start it with: node server.js');
 };
 $('logToggle').onclick = () => {

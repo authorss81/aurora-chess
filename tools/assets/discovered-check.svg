@@ -69,10 +69,10 @@
 <text x="191.25" y="21.25" font-size="34.85" text-anchor="middle" dominant-baseline="central" fill="#1a1a1a" stroke="#ffffff" stroke-width="0.7" paint-order="stroke" font-family="DejaVu Sans, Segoe UI Symbol, serif">♚</text>
 <text x="21.25" y="318.75" font-size="34.85" text-anchor="middle" dominant-baseline="central" fill="#ffffff" stroke="#1a1a1a" stroke-width="0.7" paint-order="stroke" font-family="DejaVu Sans, Segoe UI Symbol, serif">♜</text>
 <text x="318.75" y="318.75" font-size="34.85" text-anchor="middle" dominant-baseline="central" fill="#ffffff" stroke="#1a1a1a" stroke-width="0.7" paint-order="stroke" font-family="DejaVu Sans, Segoe UI Symbol, serif">♚</text>
-<defs><marker id="gradzbods58" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#4caf50"/></marker></defs>
-<line x1="191.25" y1="276.25" x2="276.25" y2="318.75" stroke="#4caf50" stroke-width="4.675" opacity="0.75" marker-end="url(#gradzbods58)" stroke-linecap="round"/>
-<defs><marker id="grad3287edw" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#f44336"/></marker></defs>
-<line x1="191.25" y1="21.25" x2="191.25" y2="318.75" stroke="#f44336" stroke-width="4.675" opacity="0.75" marker-end="url(#grad3287edw)" stroke-linecap="round"/>
+<defs><marker id="gradpoh1y16" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#4caf50"/></marker></defs>
+<line x1="191.25" y1="276.25" x2="276.25" y2="318.75" stroke="#4caf50" stroke-width="4.675" opacity="0.75" marker-end="url(#gradpoh1y16)" stroke-linecap="round"/>
+<defs><marker id="gradpjcmfd1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#f44336"/></marker></defs>
+<line x1="191.25" y1="21.25" x2="191.25" y2="318.75" stroke="#f44336" stroke-width="4.675" opacity="0.75" marker-end="url(#gradpjcmfd1)" stroke-linecap="round"/>
 <text x="21.25" y="334.9" font-size="11.05" text-anchor="middle" fill="#333" font-family="monospace">a</text>
 <text x="5.1" y="318.75" font-size="11.05" dominant-baseline="central" fill="#333" font-family="monospace">8</text>
 <text x="63.75" y="292.4" font-size="11.05" text-anchor="middle" fill="#333" font-family="monospace">b</text>

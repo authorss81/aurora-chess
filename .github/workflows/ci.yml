@@ -123,6 +123,81 @@ jobs:
       - name: Play 20 plies and verify every move is legal
         run: python tools/selfplay.py 20 4
 
+  desktop:
+    name: Windows desktop app (Tauri)
+    runs-on: windows-latest
+    needs: [rust-windows]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Cache the Tauri dependency tree. It is ~400 crates, so a cold build is
+      # the dominant cost of this job and it is worth caching aggressively.
+      - name: Cache Tauri cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            02-fast-app/src-tauri/target
+          key: tauri-${{ runner.os }}-${{ hashFiles('02-fast-app/src-tauri/Cargo.lock') }}
+
+      - name: Cache npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: 02-fast-app/package-lock.json
+
+      - name: Install Tauri CLI
+        working-directory: 02-fast-app
+        run: npm install --no-audit --no-fund
+
+      # The desktop app runs the engine as a child process, so the engine has to
+      # exist before bundling. Build it first and stage it where the shell
+      # looks for it.
+      - name: Build engine
+        run: cargo build --manifest-path 01-learning-engine/Cargo.toml --release
+
+      - name: Stage engine next to the app
+        shell: pwsh
+        run: |
+          $stage = "02-fast-app\src-tauri\engine"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "01-learning-engine\target\release\aurora-engine.exe" $stage\
+
+      - name: Verify the Tauri config parses before spending 10 minutes on it
+        shell: pwsh
+        working-directory: 02-fast-app
+        run: |
+          $conf = Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json
+          Write-Output "productName : $($conf.productName)"
+          Write-Output "identifier : $($conf.identifier)"
+          Write-Output "targets    : $($conf.bundle.targets -join ', ')"
+
+      - name: Build the installer
+        working-directory: 02-fast-app
+        run: npm run tauri build -- --bundles nsis
+
+      - name: Collect the installers
+        shell: pwsh
+        run: |
+          Get-ChildItem "02-fast-app\src-tauri\target\release\bundle" -Recurse -Include *.exe,*.msi |
+            ForEach-Object { Write-Output "$($_.Length) $($_.FullName)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurora-chess-desktop-windows
+          path: |
+            02-fast-app/src-tauri/target/release/bundle/**/*.exe
+            02-fast-app/src-tauri/target/release/bundle/**/*.msi
+          if-no-files-found: error
+          retention-days: 30
+
   build-output:
     name: Release bundle
     runs-on: windows-latest

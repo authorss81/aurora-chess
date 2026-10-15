@@ -71,8 +71,8 @@
 <text x="191.25" y="318.75" font-size="34.85" text-anchor="middle" dominant-baseline="central" fill="#ffffff" stroke="#1a1a1a" stroke-width="0.7" paint-order="stroke" font-family="DejaVu Sans, Segoe UI Symbol, serif">♚</text>
 <text x="276.25" y="63.75" font-size="34.85" text-anchor="middle" dominant-baseline="central" fill="#1a1a1a" stroke="#ffffff" stroke-width="0.7" paint-order="stroke" font-family="DejaVu Sans, Segoe UI Symbol, serif">♟</text>
 <text x="148.75" y="148.75" font-size="34.85" text-anchor="middle" dominant-baseline="central" fill="#1a1a1a" stroke="#ffffff" stroke-width="0.7" paint-order="stroke" font-family="DejaVu Sans, Segoe UI Symbol, serif">♟</text>
-<defs><marker id="graduestp76" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#4caf50"/></marker></defs>
-<line x1="106.25" y1="148.75" x2="191.25" y2="191.25" stroke="#4caf50" stroke-width="4.675" opacity="0.75" marker-end="url(#graduestp76)" stroke-linecap="round"/>
+<defs><marker id="gradwag31hb" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#4caf50"/></marker></defs>
+<line x1="106.25" y1="148.75" x2="191.25" y2="191.25" stroke="#4caf50" stroke-width="4.675" opacity="0.75" marker-end="url(#gradwag31hb)" stroke-linecap="round"/>
 <text x="21.25" y="334.9" font-size="11.05" text-anchor="middle" fill="#333" font-family="monospace">a</text>
 <text x="5.1" y="318.75" font-size="11.05" dominant-baseline="central" fill="#333" font-family="monospace">8</text>
 <text x="63.75" y="292.4" font-size="11.05" text-anchor="middle" fill="#333" font-family="monospace">b</text>

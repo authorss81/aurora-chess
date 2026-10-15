@@ -36,3 +36,7 @@ desktop.ini
 __pycache__/
 *.pyc
 .venv/
+# Tauri build output and the staged engine copy
+02-fast-app/src-tauri/target/
+02-fast-app/src-tauri/engine/
+02-fast-app/dist/
