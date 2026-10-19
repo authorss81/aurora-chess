@@ -178,9 +178,16 @@ export function think(pos, depth, onInfo) {
       if (localBest === null) {
         score = -search(after, -MATE - 1, MATE + 1, d - 1, 1);
       } else {
+        // Principal variation search. The child's window is (-beta, -alpha),
+        // and since the root score is negated, "better than localScore" for
+        // the child means "worse than -localScore". Keeping beta_child at
+        // -localScore in BOTH passes matters: using localScore + 1 as beta
+        // makes the window collapse whenever localScore is negative, which
+        // cuts off instantly and hands back a sign-flipped score. That bug
+        // showed up as every evaluation coming back positive.
         score = -search(after, -(localScore + 1), -localScore, d - 1, 1);
         if (score > localScore) {
-          score = -search(after, -MATE - 1, localScore + 1, d - 1, 1);
+          score = -search(after, -MATE - 1, -localScore, d - 1, 1);
         }
       }
       if (score > localScore) {
