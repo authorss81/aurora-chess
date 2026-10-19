@@ -214,6 +214,84 @@ console.log('a second move is graded too');
     `moves=${st().history.map((h) => h.san).join(' ')}`);
 }
 
+console.log('the arrowhead is proportionate');
+{
+  const svg = $('arrows');
+  const marker = svg && svg.querySelector('marker');
+  const head = marker ? Number(marker.getAttribute('markerWidth')) : NaN;
+  const units = marker ? marker.getAttribute('markerUnits') : null;
+  const path = svg && svg.querySelector('path[marker-end]');
+  const stroke = path ? Number(path.getAttribute('stroke-width')) : NaN;
+
+  check('the marker is sized in user units, not stroke widths',
+    units === 'userSpaceOnUse', `markerUnits=${units}`);
+  check('the arrowhead is smaller than half a square',
+    head < 480 / 8 * 0.5, `head=${head}px, cell=${480 / 8}px`);
+  check('the arrow is thinner than half a square',
+    stroke < 480 / 8 * 0.4, `stroke=${stroke}px`);
+  // the bug this guards against: markerUnits=strokeWidth scaled the head by the
+  // stroke, giving a head over 100px across on a 480px board
+  check('the arrowhead is not scaled by the stroke width',
+    head < stroke * 12, `head=${head} stroke=${stroke}`);
+}
+
+console.log('the clock');
+{
+  $('tcSel').value = '300+3';
+  $('modeSel').value = 'engine';
+  $('sideSel').value = 'white';
+  $('newBtn').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await sleep(120);
+
+  const base = { ...st().clocks };
+  // parseTC() returns milliseconds: base 5 min -> 300000. White's clock is
+  // already running, so allow what has ticked since newGame.
+  check('a 5+3 game starts at 300000ms each',
+    base.b === 300000 && base.w <= 300000 && base.w > 300000 - 1000,
+    `w=${base.w.toFixed(0)} b=${base.b}`);
+
+  // The running clock must go DOWN, and only for the side to move.
+  const before = { w: st().clocks.w, b: st().clocks.b };
+  await sleep(700);
+  const after = { w: st().clocks.w, b: st().clocks.b };
+  check("White's clock counts down while White is to move",
+    after.w < before.w, `${before.w.toFixed(2)} -> ${after.w.toFixed(2)}`);
+  check("Black's clock does not run while White is to move",
+    after.b === before.b, `b ${before.b.toFixed(2)} -> ${after.b.toFixed(2)}`);
+
+  // White moves: Black's clock should take over, and White banks the increment.
+  clickSquare(12); await sleep(40);
+  clickSquare(28);
+  await waitFor('the engine to reply', () => st().history.length >= 2, 8000);
+  await sleep(700);
+
+  const post = { w: st().clocks.w, b: st().clocks.b };
+  // With increment the engine banks +3 for completing its move. That is correct
+  // chess, but it means the number goes UP, which reads as a broken clock unless
+  // it is labelled.
+  check('White banks the increment for its completed move',
+    post.w > after.w - 1.0, `w ${after.w.toFixed(1)} -> ${post.w.toFixed(1)}`);
+  check('Black ran its clock while thinking then banked +3',
+    post.b >= 300000 - 3000, `b=${post.b.toFixed(0)}ms (started 300000)`);
+  // The engine has replied, so White is to move again and White's clock should
+  // now be the one running.
+  const w1 = st().clocks.w;
+  const b1 = st().clocks.b;
+  await sleep(600);
+  const w2 = st().clocks.w, b2 = st().clocks.b;
+  check("White's clock runs again once it is White's turn",
+    w2 < w1, `w ${w1.toFixed(0)} -> ${w2.toFixed(0)}`);
+  check("Black's clock is stopped once it is White's turn",
+    b2 === b1, `b ${b1.toFixed(0)} -> ${b2.toFixed(0)}`);
+
+  // A clock going up must say why.
+  const flash = doc.querySelector('#cw .inc.show, #cb .inc.show');
+  check('the increment is shown on the clock that banked it', !!flash,
+    flash ? `"${flash.textContent}"` : 'no .inc.show element');
+  check('the increment badge shows the right amount',
+    !!flash && flash.textContent === '+3', flash ? flash.textContent : 'none');
+}
+
 console.log('the app stays responsive and re-orients');
 {
   let responsive = true;

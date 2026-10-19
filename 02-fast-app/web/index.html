@@ -106,6 +106,16 @@
     background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:9px 13px;
   }
   .clock.active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset}
+  /* The increment makes a clock go UP by design. That is correct chess, but
+     with nothing on screen it reads as a broken clock, so bank it visibly. */
+  .clock{position:relative}
+  .clock .inc{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    font-family:Consolas,monospace; font-size:15px; font-weight:700;
+    color:#7fd67f; text-shadow:0 1px 3px #000; pointer-events:none;
+    opacity:0; transition:opacity .35s ease;
+  }
+  .clock .inc.show{opacity:1}
   .clock .who{font-size:13px; color:var(--muted)}
   .clock .tm{font-family:Consolas,monospace; font-size:26px; font-variant-numeric:tabular-nums}
   .clock.low .tm{color:#e06c5a}
@@ -358,6 +368,31 @@ function startClock(){
 function stopClock(){
   if (state.timer){ clearInterval(state.timer); state.timer = null; }
 }
+/**
+ * Show "+N" on the clock that just banked its increment.
+ *
+ * A clock that counts up is the single most confusing thing in a game with an
+ * increment, and it is exactly what made this look like a broken timer. The
+ * number now jumps and something visibly explains why.
+ */
+function flashIncrement(key){
+  const el = $(key === 'w' ? 'cw' : 'cb');
+  const inc = state.clocks.inc;
+  if (!el || !inc) return;
+  let flash = el.querySelector('.inc');
+  if (!flash) {
+    flash = document.createElement('span');
+    flash.className = 'inc';
+    el.appendChild(flash);
+  }
+  flash.textContent = '+' + Math.round(inc / 1000);
+  flash.classList.remove('show');
+  void flash.offsetWidth;                 // force a reflow so it re-animates
+  flash.classList.add('show');
+  clearTimeout(flash._timer);
+  flash._timer = setTimeout(() => flash.classList.remove('show'), 1400);
+}
+
 function renderClocks(){
   $('cwt').textContent = fmtTime(state.clocks.w);
   $('cbt').textContent = fmtTime(state.clocks.b);
@@ -403,21 +438,24 @@ function renderArrows(list) {
     const dx = x2 - x1, dy = y2 - y1;
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx / len, uy = dy / len;
-    // Pull both ends in off the square centres: starting the shaft under the
-    // piece and ending it past the target centre made short moves look like
-    // they pointed somewhere else entirely.
-    const inset = Math.min(len * 0.34, w * 0.05);
+    const inset = Math.min(len * 0.32, w * 0.05);
     const sx = x1 + ux * inset, sy = y1 + uy * inset;
     const ex = x2 - ux * inset, ey = y2 - uy * inset;
-    // One gentle bow so the arrow reads clearly over the piece glyphs.
-    const bow = Math.min(len * 0.12, w * 0.035);
+    const bow = Math.min(len * 0.1, w * 0.03);
     const mx = (sx + ex) / 2 - uy * bow;
     const my = (sy + ey) / 2 + ux * bow;
-    svg += `<defs><marker id="${id}" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
-      <path d="M0,0 L6,3 L0,6 z" fill="${a.color}"/></marker></defs>`;
+    // markerUnits must be userSpaceOnUse. The SVG default is "strokeWidth",
+    // which multiplies the marker size by the stroke width - a markerWidth of 7
+    // against a 15px stroke produced arrowheads over 100px across that covered
+    // three squares. Size the head as a fraction of the cell instead.
+    const head = w * 0.028;
+    svg += `<defs><marker id="${id}" markerUnits="userSpaceOnUse"
+            markerWidth="${head.toFixed(1)}" markerHeight="${head.toFixed(1)}"
+            viewBox="0 0 10 10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="${a.color}"/></marker></defs>`;
     svg += `<path d="M${sx.toFixed(1)},${sy.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${ex.toFixed(1)},${ey.toFixed(1)}"
-            fill="none" stroke="${a.color}" stroke-width="${(w * 0.032).toFixed(1)}"
-            opacity="0.85" marker-end="url(#${id})" stroke-linecap="round"/>`;
+            fill="none" stroke="${a.color}" stroke-width="${(w * 0.016).toFixed(1)}"
+            opacity="0.8" marker-end="url(#${id})" stroke-linecap="round"/>`;
   });
   layer.innerHTML = svg;
 }
@@ -726,9 +764,11 @@ function commitMove(m){
   state.selected = null;
   state.legal = [];
 
-  // clock: the mover banks the increment
+  // Clock: the mover banks the increment. state.pos.turn has already flipped,
+  // so the mover is the side that is now NOT to move.
   const key = state.pos.turn > 0 ? 'b' : 'w';
   state.clocks[key] += state.clocks.inc;
+  flashIncrement(key);
 
   renderAll();
 
