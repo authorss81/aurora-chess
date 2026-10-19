@@ -1,0 +1,6 @@
+{
+  "name": "aurora-chess-web",
+  "private": true,
+  "type": "module",
+  "description": "Browser build of the board and the JavaScript fallback engine. Isolated package.json so these files can be ES modules while the server and build scripts at the repo root stay CommonJS."
+}

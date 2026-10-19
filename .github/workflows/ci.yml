@@ -96,6 +96,17 @@ jobs:
       - name: Sanity check the JavaScript search
         run: node 02-fast-app/web/smoke-test.mjs
 
+      # The coach grades every move the user plays. Wrong arithmetic here means
+      # the app confidently calls good moves blunders, which is worse than
+      # having no coach at all.
+      - name: Coach grading logic
+        run: node 02-fast-app/web/coach-test.mjs
+
+      # Arrows are drawn on an SVG layer over the board. If the square->pixel
+      # mapping disagrees with renderBoard(), they point at the wrong squares.
+      - name: Coach arrow geometry
+        run: node 02-fast-app/web/arrow-test.mjs
+
   selfplay:
     name: Self-play (no illegal moves)
     runs-on: ubuntu-latest

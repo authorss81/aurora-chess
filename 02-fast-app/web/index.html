@@ -19,7 +19,27 @@
   .app{display:flex; gap:20px; max-width:1200px; width:100%; flex-wrap:wrap}
 
   /* ---------- board ---------- */
-  .boardwrap{display:flex; gap:12px}
+  .boardwrap{display:flex; gap:12px; position:relative}
+  /* Arrows live in an SVG layer over the board. pointer-events:none so they
+     never swallow a click. */
+  #arrows{position:absolute; inset:0; pointer-events:none; z-index:5; overflow:visible}
+  .coachpanel{
+    margin-top:10px; padding:10px 12px; border-radius:8px;
+    border:1px solid var(--line); background:#14120f; font-size:13.5px; line-height:1.55;
+  }
+  .coachbadge{
+    display:inline-block; font-weight:700; padding:2px 10px; border-radius:12px;
+    margin-right:8px; font-size:13px; letter-spacing:.3px;
+  }
+  .b-best{background:#3d7a3a;color:#eaf5e8}
+  .b-good{background:#4a6b8a;color:#e8f0f7}
+  .b-ok{background:#5a5340;color:#f0ead8}
+  .b-inacc{background:#8a6b2a;color:#fdf3d8}
+  .b-mist{background:#9a5a2a;color:#fde8d8}
+  .b-blun{background:#8f3a34;color:#fde3e1}
+  .coachdelta{font-family:Consolas,monospace; font-size:12.5px; color:var(--muted)}
+  .coachteach{color:#cfc6b8; margin-top:6px}
+  .coachteach b{color:var(--accent)}
   .evalbar{
     width:20px; border-radius:10px; overflow:hidden; position:relative;
     background:#4a4034; border:1px solid var(--line);
@@ -217,6 +237,18 @@
 
     <div class="panel" style="display:flex; flex-direction:column; gap:10px">
       <div class="status" id="status">Ready. Make a move.</div>
+      <div class="row" style="margin:0 0 8px">
+        <label><input type="checkbox" id="coachOn" checked> Coach mode</label>
+        <select id="coachDepth" title="how hard the coach looks">
+          <option value="6">coach depth 6</option>
+          <option value="9" selected>coach depth 9</option>
+          <option value="12">coach depth 12</option>
+          <option value="14">coach depth 14</option>
+        </select>
+      </div>
+      <div class="coachpanel" id="coachPanel" style="display:none">
+        <div id="coachBody"><span style="color:#6d6151">Play a move and it will be graded here.</span></div>
+      </div>
       <div class="moves" id="moves"></div>
       <div class="pv" id="pv">&nbsp;</div>
       <div class="row">
@@ -298,14 +330,23 @@ function fmtTime(ms){
 }
 function startClock(){
   stopClock();
-  const side = state.pos.turn;
   state.lastTick = performance.now();
+  // Which clock runs is derived from the position on every tick, never captured
+  // once. Capturing the side at call time means any path that swaps the side to
+  // move without restarting the interval leaves the wrong clock counting, and
+  // because the increment is then applied to the other one, a display that
+  // appears to run backwards is the symptom.
   state.timer = setInterval(() => {
     const now = performance.now();
-    const dt = now - state.lastTick;
+    // Cap the decrement: a backgrounded tab that wakes up after minutes must not
+    // dump all of that into one tick.
+    const dt = Math.min(now - state.lastTick, 500);
     state.lastTick = now;
+
+    const side = state.pos.turn;               // live, not captured
     const key = side > 0 ? 'w' : 'b';
     state.clocks[key] -= dt;
+
     if (state.clocks[key] <= 0){
       state.clocks[key] = 0;
       stopClock();
@@ -327,13 +368,220 @@ function renderClocks(){
   $('cb').classList.toggle('low', state.clocks.b < 30000);
 }
 
+// ---------------------------------------------------------------- arrows
+// One SVG layer sits over the board. Arrows are drawn in board coordinates so
+// they stay correct at any window size.
+function renderArrows(list) {
+  const board = $('board');
+  let layer = $('arrows');
+  if (!layer) {
+    layer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    layer.id = 'arrows';
+    $('board').parentElement.appendChild(layer);
+  }
+  const r = board.getBoundingClientRect();
+  const w = r.width, h = r.height;
+  layer.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  layer.setAttribute('width', w);
+  layer.setAttribute('height', h);
+  layer.style.left = board.offsetLeft + 'px';
+  layer.style.top = board.offsetTop + 'px';
+
+  // Derive the cell centre from sqIndex(), the same function that positions the
+  // squares in renderBoard(). Recomputing the flip maths here instead would be a
+  // silent bug the first time the board orientation logic changes.
+  const centre = (sq) => {
+    const idx = sqIndex(sq);
+    const cell = w / 8;
+    return [((idx % 8) + 0.5) * cell, (Math.floor(idx / 8) + 0.5) * cell];
+  };
+
+  let svg = '';
+  (list || []).forEach((a, i) => {
+    const [x1, y1] = centre(a.from);
+    const [x2, y2] = centre(a.to);
+    const id = 'ah' + i;
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    // stop the shaft short so the arrowhead sits on the square centre
+    const sx = x1 + ux * (w * 0.055), sy = y1 + uy * (w * 0.055);
+    const ex = x2 - ux * (w * 0.045), ey = y2 - uy * (w * 0.045);
+    const mx = (x1 + x2) / 2 - uy * (w * 0.055);
+    const my = (y1 + y2) / 2 + ux * (w * 0.055);
+    const qx = (x1 + x2) / 2 + uy * (w * 0.055);
+    const qy = (y1 + y2) / 2 - ux * (w * 0.055);
+    svg += `<defs><marker id="${id}" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 z" fill="${a.color}"/></marker></defs>`;
+    svg += `<path d="M${x1},${y1} Q${mx},${my} ${qx},${qy} T${ex},${ey}"
+            fill="none" stroke="${a.color}" stroke-width="${w * 0.032}"
+            opacity="0.85" marker-end="url(#${id})" stroke-linecap="round"/>`;
+  });
+  layer.innerHTML = svg;
+}
+window.addEventListener('resize', () => renderArrows(state.arrows || []));
+
+// ---------------------------------------------------------------- coach
+// Grade a move by comparing the evaluation before it with the evaluation after
+// the opponent's best reply. That gap is the only honest measure of how good
+// the move was: a move that looks fine but lets a forcing reply is worth less
+// than it appears.
+const COACH_BANDS = [
+  { max: 12,  key: 'best',  label: 'Best move',   cls: 'b-best'  },
+  { max: 35,  key: 'good',  label: 'Good',        cls: 'b-good'  },
+  { max: 70,  key: 'ok',    label: 'Slightly off',cls: 'b-ok'    },
+  { max: 120, key: 'inacc', label: 'Inaccuracy',  cls: 'b-inacc' },
+  { max: 220, key: 'mist',  label: 'Mistake',     cls: 'b-mist'  },
+  { max: Infinity, key: 'blun', label: 'Blunder', cls: 'b-blun' },
+];
+
+function gradeMove(loss) {
+  return COACH_BANDS.find((b) => loss <= b.max);
+}
+
+function fmtPawns(cp) {
+  const v = cp / 100;
+  return (v >= 0 ? '+' : '') + v.toFixed(2);
+}
+
+function setCoach(html) {
+  const panel = $('coachPanel');
+  const body = $('coachBody');
+  if (!panel || !body) return;
+  if (!html) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  body.innerHTML = html;
+}
+
+/**
+ * Analyse an arbitrary position given as a FEN.
+ *
+ * Takes a FEN rather than a Position because the coach needs to score the
+ * position *before* the move, which is no longer the live board. Returns
+ * { move, score, san } where score is always from the side-to-move's point of
+ * view, matching both think() and UCI.
+ */
+async function searchPosition(fen, budgetMs) {
+  const pos = new Position(fen);
+  // The coach always plays at full strength regardless of the difficulty
+  // slider, or it could not find the punish it is supposed to be explaining.
+  const skill = 20;
+  if (state.source === 'rust' && state.rust.available) {
+    const r = await askRust(skill, budgetMs, fen, true);
+    return { move: r.move, score: r.score, san: r.san };
+  }
+  const d = Math.max(2, Math.min(7, Math.round(budgetMs / 600)));
+  const res = think(pos, d);
+  return { move: res.move, score: res.score, san: res.move ? safeSan(pos, res.move) : null };
+}
+
+/**
+ * Grade the move the human just played.
+ *
+ * The score gap that matters is the difference between how good the position
+ * looked before the move and how good it is once the opponent has answered
+ * optimally. Scoring the position immediately after the human's move would
+ * flatter every move, because a blunder usually only becomes visible when the
+ * opponent finds the follow-up.
+ */
+async function runCoach(played, fenBefore, fenAfter, entry) {
+  const budget = coachBudgetMs();
+  setCoach('<span style="color:#6d6151">analysing your move...</span>');
+
+  // Short search before the move (enough to score it), full budget after, since
+  // finding the opponent's best reply is the whole point.
+  const pre  = await searchPosition(fenBefore, Math.round(budget * 0.4));
+  const post = await searchPosition(fenAfter, budget);
+
+  // The player may have moved on while we were thinking.
+  if (entry && state.history[state.history.length - 1] !== entry) return;
+
+  const beforeHuman = pre.score;     // fenBefore: the human is to move
+  const afterHuman = -post.score;    // fenAfter: the opponent is to move
+  const loss = beforeHuman - afterHuman;
+  const band = gradeMove(Math.abs(loss));
+  const oppName = played.mover > 0 ? 'Black' : 'White';
+
+  const good = band.key === 'best' || band.key === 'good';
+  const arrows = [{
+    from: played.from, to: played.to,
+    color: good ? '#4caf50' : '#e06c5a',
+  }];
+  let replyText = '';
+  if (post.move) {
+    arrows.push({ from: post.move.from, to: post.move.to, color: '#8f3a34' });
+    replyText = ` ${oppName}'s strongest reply is <b>${post.san}</b>.`;
+  }
+  state.arrows = arrows;
+  renderArrows(arrows);
+
+  const lost = Math.abs(loss);
+  let explain;
+  if (good) {
+    explain = `Your side goes from ${fmtPawns(beforeHuman)} to ${fmtPawns(afterHuman)}. ${
+      lost < 12 ? 'That is a clean move.' : 'That is a normal change of evaluation for a developing move.'}`;
+  } else if (band.key === 'blun') {
+    explain = `Your side drops from ${fmtPawns(beforeHuman)} to ${fmtPawns(afterHuman)} - a swing of ${fmtLoss(lost)}. ${
+      pre.san ? `Better was <b>${pre.san}</b>. ` : ''}Look for a piece that is left undefended, or a king that steps closer to danger.`;
+  } else if (band.key === 'mist') {
+    explain = `You lose ${fmtLoss(lost)} of evaluation. Nothing falls off the board immediately, but ${
+      pre.san ? `a safer choice was <b>${pre.san}</b>. ` : ''}this quietly weakens a piece or a square.`;
+  } else {
+    explain = `A small slip of ${fmtLoss(lost)}. ${
+      pre.san ? `<b>${pre.san}</b> keeps more. ` : ''}Watch that your pieces stay defended.`;
+  }
+
+  setCoach(`
+    <span class="coachbadge ${band.cls}">${band.label}</span>
+    <span class="coachdelta">${fmtPawns(beforeHuman)} &rarr; ${fmtPawns(afterHuman)} (${fmtLoss(loss)})</span>
+    <div class="coachteach">${explain}${replyText}</div>
+  `);
+  state.lastCoach = { loss, band, played, bestReply: post.move };
+
+  // Remember the verdict on the move itself so the list can show it later and a
+  // click on the move can bring the explanation back.
+  if (entry) {
+    entry.grade = {
+      key: band.key,
+      cls: band.cls,
+      short: band.key === 'blun' ? '??'
+           : band.key === 'mist' ? '?'
+           : band.key === 'inacc' ? '?!'
+           : band.key === 'best' ? '!!' : '',
+      detail: $('coachBody').innerHTML,
+      arrows: arrows.slice(),
+    };
+    renderMoves();
+  }
+}
+
+function safeSan(pos, m) {
+  try { return toSan(pos, m); } catch (e) { return sqName(m.from) + sqName(m.to); }
+}
+
+/** Format a score that was lost, always shown as a negative number. */
+function fmtLoss(cp) {
+  return '-' + Math.abs(cp / 100).toFixed(2);
+}
+
+function coachBudgetMs() {
+  const d = parseInt($('coachDepth').value, 10) || 9;
+  // roughly exponential in the chosen depth, capped so a click never hangs
+  return Math.min(4000, 200 * Math.pow(2, d - 3));
+}
+
 // ---------------------------------------------------------------- board
 function renderBoard(){
   const b = $('board');
   b.innerHTML = '';
   const order = [];
+  // Normal view: rank 8 on top, files a-h left to right.
+  // Flipped: rank 1 on top and files h-a, i.e. a 180 degree rotation so the
+  // side you are playing sits at the bottom. Mirroring only the files (the old
+  // behaviour) produced a board that was not a rotation at all - rank 8 stayed
+  // on top, so Black's pieces still read as being at the far end.
   for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++){
-    order.push(state.flipped ? [7 - f, 7 - r] : [f, 7 - r]);
+    order.push(state.flipped ? [7 - f, r] : [f, 7 - r]);
   }
   for (const [file, rank] of order){
     const sq = makeSq(file, rank);
@@ -369,9 +617,12 @@ function renderBoard(){
     const el = b.children[sqIndex(ksq)];
     if (el) el.classList.add('check');
   }
+  // Read the file and rank back out of the mapping instead of assuming
+  // col == file and rank == 8 - row. That assumption is only true in one
+  // orientation, which is how the labels ended up wrong when the board flipped.
   Array.from(b.children).forEach((el, i) => {
-    const file = i % 8, row = Math.floor(i / 8);
-    if (row === 7){
+    const { file, rank } = sqAtIndex(i);
+    if (Math.floor(i / 8) === 7){
       const c = document.createElement('span');
       c.className = 'coord f';
       c.textContent = 'abcdefgh'[file];
@@ -380,14 +631,26 @@ function renderBoard(){
     if (file === 7){
       const c = document.createElement('span');
       c.className = 'coord r';
-      c.textContent = String(8 - row);
+      c.textContent = String(rank + 1);
       el.appendChild(c);
     }
   });
 }
+/**
+ * Where a square sits among the board's 64 DOM children.
+ * Keep in step with renderBoard()'s order array and with sqAtIndex() below.
+ */
 function sqIndex(sq){
   const f = fileOf(sq), r = rankOf(sq);
-  return state.flipped ? (7 - f) + (7 - r) * 8 : f + (7 - r) * 8;
+  return state.flipped ? (7 - f) + r * 8 : f + (7 - r) * 8;
+}
+
+/** Inverse of sqIndex(): which square is in DOM child `i`. */
+function sqAtIndex(i){
+  const col = i % 8, row = Math.floor(i / 8);
+  return state.flipped
+    ? { file: 7 - col, rank: row }
+    : { file: col,     rank: 7 - row };
 }
 // ---------------------------------------------------------------- moves
 function onSquareClick(sq){
@@ -440,7 +703,9 @@ function commitMove(m){
   const san = toSan(state.pos, m);
   const before = state.pos.fen();
   const next = applyMove(state.pos, m);
-  state.history.push({ san, from: m.from, to: m.to, fenBefore: before });
+  const mover = state.pos.turn;
+  const grade = null;
+  state.history.push({ san, from: m.from, to: m.to, fenBefore: before, mover, grade });
   state.pos = next;
   state.lastMove = { from: m.from, to: m.to };
   state.selected = null;
@@ -461,17 +726,47 @@ function commitMove(m){
   }
 
   const hs = humanSide();
-  if (hs === null || state.pos.turn === hs) {
+  if (hs === null) {
     startClock();
+  } else if (state.pos.turn === hs) {
+    // the engine has replied; start its clock and settle the arrows
+    startClock();
+    state.arrows = [];
+    renderArrows([]);
   } else {
-    engineMove();
+    // The engine is now to move, so its clock runs while it thinks. That is
+    // what a real chess clock does, and it is why the number used to appear to
+    // jump upwards: it was frozen and then banked the increment.
+    startClock();
+
+    // Coach: grade the move the human just made.
+    //
+    // This runs AFTER the engine has replied. Both drive the same UCI pipe, so
+    // analysing concurrently with engineMove() interleaves their output and
+    // corrupts both. The FENs are captured now because state.pos moves on.
+    const played = { from: m.from, to: m.to, mover };
+    const fenBefore = before;
+    const fenAfter = state.pos.fen();
+    const entry = state.history[state.history.length - 1];
+
+    state.arrows = [{ from: m.from, to: m.to, color: '#e6c14a' }];
+    renderArrows(state.arrows);
+
+    engineMove().then(() => {
+      if (!coachEnabled()) return;
+      return runCoach(played, fenBefore, fenAfter, entry).catch(() => {});
+    });
   }
+}
+
+function coachEnabled() {
+  const el = $('coachOn');
+  return el ? el.checked : false;
 }
 
 // ---------------------------------------------------------------- engine
 async function engineMove(){
   state.thinking = true;
-  stopClock();
   renderBoard();
 
   const skill = Number($('levelSel').value);
@@ -555,8 +850,25 @@ async function httpGet(url) {
 }
 
 // ---------------------------------------------------------------- rust bridge
-async function askRust(skill, budgetMs){
-  if (!state.rust.available) return { move: null, score: 0 };
+// Every engine command goes through this queue. Two overlapping "go" commands on
+// one UCI pipe interleave their output, which silently corrupts both results -
+// so the coach's analysis and the engine's own move are strictly serialised.
+let uciQueue = Promise.resolve();
+function withEngine(fn) {
+  const run = uciQueue.then(fn, fn);
+  uciQueue = run.then(() => {}, () => {});
+  return run;
+}
+
+async function askRust(skill, budgetMs, fen, quiet) {
+  return withEngine(() => askRustInner(skill, budgetMs, fen, quiet));
+}
+
+async function askRustInner(skill, budgetMs, fen, quiet){
+  if (!state.rust.available) return { move: null, score: 0, san: null };
+  // fen lets the coach analyse a position that is no longer on the board. When
+  // omitted it searches the live position, which is what the opponent needs.
+  const searchFen = fen || state.pos.fen();
   // Skill Level is the honest weakness dial. Depth is not: at a fixed depth the
   // engine misses deep tactics but will still pick a depth-1 "brilliant" move
   // over its own depth-1 refutation. A narrower window makes it miss the good
@@ -564,11 +876,15 @@ async function askRust(skill, budgetMs){
   const cmds = [
     `ucinewgame`,
     `setoption name Skill Level value ${skill}`,
-    `position fen ${state.pos.fen()}`,
+    `position fen ${searchFen}`,
     `go movetime ${Math.max(100, Math.round(budgetMs))}`,
   ];
   if (IN_TAURI) await tauriInvoke('uci_send', { lines: cmds });
   else await httpPost('/uci', { lines: cmds });
+
+  // The score has to be latched from the info lines: `bestmove` carries no
+  // score, and returning 0 here made the coach grade every move as worthless.
+  let lastScore = 0;
 
   // read until bestmove
   for (let i = 0; i < 4000; i++){
@@ -584,23 +900,34 @@ async function askRust(skill, budgetMs){
         log(ln);
         if (ln.startsWith('info depth')){
           const m = ln.match(/score (cp|mate) (-?\d+)/);
-          if (m) updateEval(Number(m[2]));
+          if (m) {
+            lastScore = Number(m[2]);
+            // quiet = an analysis pass that must not move the eval bar
+            if (!quiet) updateEval(lastScore);
+          }
         }
         if (ln.startsWith('bestmove')){
           const from = sqFromName(ln.slice(9, 11));
           const to = sqFromName(ln.slice(11, 13));
           const promoChar = ln[13];
           const promo = promoChar ? ({ n:2, b:3, r:4, q:5 })[promoChar] || 0 : 0;
-          const legal = generateLegal(state.pos);
-          const match = legal.find(x => x.from === from && x.to === to && (promo === 0 || x.promo === promo));
-          return { move: match || legal.find(x => x.from === from && x.to === to) || legal[0], score: 0 };
+          const probe = new Position(searchFen);
+          const legal = generateLegal(probe);
+          const match = legal.find(x => x.from === from && x.to === to && (promo === 0 || x.promo === promo))
+                     || legal.find(x => x.from === from && x.to === to)
+                     || legal[0];
+          return {
+            move: match,
+            score: lastScore,
+            san: match ? safeSan(probe, match) : null,
+          };
         }
       }
     } else {
       await new Promise(r => setTimeout(r, 20));
     }
   }
-  return { move: null, score: 0 };
+  return { move: null, score: lastScore, san: null };
 }
 
 function log(s){
@@ -646,17 +973,27 @@ function renderMoves(){
   let html = '';
   state.history.forEach((h, i) => {
     if (i % 2 === 0) html += `<span class="num">${i / 2 + 1}.</span>`;
-    html += `<span class="san${i === state.history.length - 1 ? ' last' : ''}" data-i="${i}">${h.san}</span> `;
+    let tag = '';
+    if (h.grade && h.grade.key) {
+      tag = ` <span class="coachbadge ${h.grade.cls}" style="font-size:10px;padding:0 6px">${h.grade.short}</span>`;
+    }
+    html += `<span class="san${i === state.history.length - 1 ? ' last' : ''}" data-i="${i}">${h.san}</span>${tag} `;
   });
   el.innerHTML = html;
   el.querySelectorAll('.san').forEach(s => {
     s.addEventListener('click', () => {
       const i = Number(s.dataset.i);
+      const h = state.history[i];
       state.history.length = i + 1;
-      state.pos = new Position(state.history[i].fenBefore);
-      state.lastMove = { from: state.history[i].from, to: state.history[i].to };
+      state.pos = new Position(h.fenBefore);
+      state.lastMove = { from: h.from, to: h.to };
       state.over = false;
       renderAll();
+      if (h.grade) {
+        setCoach(h.grade.detail);
+        state.arrows = h.grade.arrows || [{ from: h.from, to: h.to, color: '#e6c14a' }];
+        renderArrows(state.arrows);
+      }
     });
   });
   el.scrollTop = el.scrollHeight;
@@ -676,8 +1013,16 @@ function newGame(){
   $('evalFill').style.height = '50%';
   $('evalLabel').textContent = '0.00';
   $('pv').innerHTML = '&nbsp;';
+  state.arrows = [];
+  state.lastCoach = null;
+  renderArrows([]);
+  setCoach(null);
+  // Put the colour you are playing at the bottom. Without this the board still
+  // reads from White's side while you play Black, which is disorienting for a
+  // beginner - Black's pawns appear to march the wrong way.
+  state.flipped = humanSide() === -1;
   renderAll();
-  setStatus('New game. White to move.');
+  setStatus(`New game. ${state.pos.turn > 0 ? 'White' : 'Black'} to move.`);
 
   const hs = humanSide();
   if (hs === -1) setTimeout(engineMove, 400);
