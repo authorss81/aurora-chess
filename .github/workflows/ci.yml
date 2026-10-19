@@ -87,6 +87,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: 02-fast-app/package-lock.json
+
+      # The GUI test needs jsdom and esbuild. Without this the earlier tests
+      # still ran (they have no dependencies) and only the GUI step failed with
+      # a bare ERR_MODULE_NOT_FOUND, which says nothing about the app.
+      - name: Install the GUI test dependencies
+        run: npm ci --prefix 02-fast-app
 
       # The browser rules layer is held to the same perft standard as the Rust
       # engine. A GUI that allows an illegal move is worse than no GUI.
