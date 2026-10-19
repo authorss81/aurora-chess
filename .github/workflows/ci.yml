@@ -246,13 +246,26 @@ jobs:
           New-Item -ItemType Directory -Force -Path release\web    | Out-Null
 
           Copy-Item 01-learning-engine\target\release\aurora-engine.exe release\engine\
-          Copy-Item 02-fast-app\web\index.html release\web\
-          Copy-Item 02-fast-app\web\chess.js  release\web\
-          Copy-Item 02-fast-app\web\engine.js release\web\
-          Copy-Item 02-fast-app\server.js release\
+Copy-Item 02-fast-app\server.js release\
           Copy-Item 02-fast-app\README.md  release\
           Copy-Item artifacts\aurora-engine-linux\aurora-engine release\engine\aurora-engine-linux
           Copy-Item README.md release\
+
+          # Every module index.html imports has to be here. Listing them one by
+          # one meant coach.js was silently left out of the bundle and the
+          # release shipped a page that could not load.
+          $imports = Select-String -Path release\web\index.html -Pattern "from '\./([^']+)'" -AllMatches |
+            ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+          Write-Output "index.html imports: $($imports -join ', ')"
+          $missing = @()
+          foreach ($m in $imports) {
+            if (Test-Path "02-fast-app\web\$m") {
+              Copy-Item "02-fast-app\web\$m" release\web\
+            } else {
+              $missing += $m
+            }
+          }
+          if ($missing.Count) { throw "web assets missing: $($missing -join ', ')" }
 
           Write-Output "packaged:"
           Get-ChildItem release -Recurse -File |

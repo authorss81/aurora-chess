@@ -139,17 +139,50 @@ console.log('a human move is accepted and answered');
     () => st().history.length >= before + 2, 8000);
   check('the engine replies', answered,
     `moves=${st().history.map((h) => h.san).join(' ')} thinking=${st().thinking}`);
+
+  // Captured here because the badge is only visible for 1.4s.
+  window.__inc = doc.querySelector('#cw .inc, #cb .inc');
 }
 
 console.log('the coach grades the move');
 {
+  const LABELS = ['Best move', 'Excellent', 'Good', 'Inaccuracy', 'Mistake', 'Blunder'];
   const graded = await waitFor('the coach badge',
-    () => $('coachPanel').style.display !== 'none' &&
-          /b-(best|good|ok|inacc|mist|blun)/.test($('coachBody').innerHTML), 8000);
-  const body = $('coachBody').textContent.trim();
-  check('a rating badge appears', graded, `panel=${$('coachPanel').style.display} body="${body.slice(0, 100)}"`);
-  check('the rating explains the swing', /[−-]\d+\.\d\d/.test(body), `"${body.slice(0, 100)}"`);
-  check('the rating mentions a score', /\d+\.\d\d/.test(body), `"${body.slice(0, 100)}"`);
+    () => LABELS.includes($('coachBadgeTop').textContent.trim()), 8000);
+  check('a rating badge appears', graded,
+    `badge="${$('coachBadgeTop').textContent.trim()}" body="${$('coachBody').textContent.slice(0, 90)}"`);
+
+  const body = $('coachBody').textContent;
+  check('the coach says which move would have been better',
+    /engine's first choice was|first choice was|was the engine's/.test(body), `"${body.slice(0, 120)}"`);
+  check('the opponent reply is named', /answers with|strongest reply/.test(body), `"${body.slice(0, 120)}"`);
+  // querySelector, not the $() helper: $ is getElementById and cannot match a class
+  const teach = doc.querySelector('.ct-teach');
+  check('there is a teaching line, not just a number',
+    teach && teach.textContent.trim().length > 20,
+    teach ? `"${teach.textContent.slice(0, 80)}"` : 'no .ct-teach');
+
+  // Win chance, not raw centipawns.
+  check('the swing is reported as win chance',
+    /win chance|no change/.test($('coachSwing').textContent),
+    `"${$('coachSwing').textContent.trim()}"`);
+  check('per-move accuracy is shown',
+    /\d+\.\d% (accuracy )?(on this move|accuracy)/.test($('coachAccuracy').textContent),
+    `"${$('coachAccuracy').textContent.trim()}"`);
+}
+
+console.log('the coach offers the better move, not just the moves played');
+{
+  const svg = $('arrows');
+  const paths = svg ? svg.querySelectorAll('path[marker-end]') : [];
+  check('all three arrows are drawn', paths.length === 3, `${paths.length} arrows`);
+  const colours = [...paths].map((p2) => (p2.getAttribute('stroke') || '').toLowerCase());
+  check('one arrow is blue: the move you should have played',
+    colours.includes('#4a9fe0'), colours.join(' '));
+  check('one arrow is dark red: your opponent\'s reply',
+    colours.includes('#c0392b'), colours.join(' '));
+  check('the move you played is coloured by quality',
+    colours.some((c) => c !== '#4a9fe0' && c !== '#c0392b'), colours.join(' '));
 }
 
 console.log('the arrow points at the squares that were played');
@@ -158,6 +191,7 @@ console.log('the arrow points at the squares that were played');
   const paths = svg ? svg.querySelectorAll('path[marker-end]') : [];
   check('an arrow layer exists', !!svg, svg ? 'yes' : 'no');
   check('at least one arrow is drawn', paths.length >= 1, `${paths.length}`);
+  // the first arrow is always the move the player just made
 
   // White played e2 -> e4, i.e. squares 12 -> 28.
   const cell = SIZE / 8;
@@ -208,8 +242,9 @@ console.log('a second move is graded too');
   const before = st().history.length;
   clickSquare(12); await sleep(40);
   clickSquare(20); await sleep(40);          // e4 -> e3
+  const LABELS = ['Best move', 'Excellent', 'Good', 'Inaccuracy', 'Mistake', 'Blunder'];
   const ok = await waitFor('second coach pass', () =>
-    /b-(best|good|ok|inacc|mist|blun)/.test($('coachBody').innerHTML) && st().history.length >= before, 8000);
+    LABELS.includes($('coachBadgeTop').textContent.trim()) && st().history.length >= before, 8000);
   check('the second move is answered', ok,
     `moves=${st().history.map((h) => h.san).join(' ')}`);
 }
@@ -284,12 +319,16 @@ console.log('the clock');
   check("Black's clock is stopped once it is White's turn",
     b2 === b1, `b ${b1.toFixed(0)} -> ${b2.toFixed(0)}`);
 
-  // A clock going up must say why.
-  const flash = doc.querySelector('#cw .inc.show, #cb .inc.show');
+  // A clock going up must say why. Checked against the snapshot taken right
+  // after the move, because the badge fades after 1.4s.
+  const flash = window.__inc;
   check('the increment is shown on the clock that banked it', !!flash,
-    flash ? `"${flash.textContent}"` : 'no .inc.show element');
+    flash ? `"${flash.textContent}" on ${flash.parentElement.id}` : 'no .inc element');
   check('the increment badge shows the right amount',
     !!flash && flash.textContent === '+3', flash ? flash.textContent : 'none');
+  check('the increment badge lands on the clock of the side that just moved',
+    !!flash && flash.parentElement.id === 'cw',
+    flash ? `badge on ${flash.parentElement.id}; the test plays White, so it belongs on cw` : 'none');
 }
 
 console.log('the app stays responsive and re-orients');

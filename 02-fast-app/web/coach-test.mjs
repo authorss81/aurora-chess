@@ -35,17 +35,14 @@ function assertLegal(fen) {
   return true;
 }
 
-// --- the same bands the GUI uses ---
-const BANDS = [
-  { max: 12, key: 'best' },
-  { max: 35, key: 'good' },
-  { max: 70, key: 'ok' },
-  { max: 120, key: 'inacc' },
-  { max: 220, key: 'mist' },
-  { max: Infinity, key: 'blun' },
-];
-const gradeMove = (loss) => BANDS.find((b) => loss <= b.max);
-const ORDER = { best: 0, good: 1, ok: 2, inacc: 3, mist: 4, blun: 5 };
+// The grading rules are imported, not copied. This file used to keep its own
+// copy of the bands; when the app switched to winning chance the copy went on
+// testing the old centipawn model and the suite stayed green.
+import {
+  winPercent, moveAccuracy, COACH_BANDS, gradeMove, gradeFromScores,
+} from './coach.js';
+
+const ORDER = Object.fromEntries(COACH_BANDS.map((b, i) => [b.key, i]));
 
 /** Grade a single move the same way the GUI does. */
 function analyseMove(startFen, played, depth = 4) {
@@ -57,11 +54,14 @@ function analyseMove(startFen, played, depth = 4) {
   const post = think(after, depth);
   const afterHuman = -post.score;                // after is opponent-to-move
   const loss = beforeScoreHuman - afterHuman;
+  const g = gradeFromScores(beforeScoreHuman, afterHuman);
   return {
     san: toSan(before, played),
     reply: post.move ? toSan(after, post.move) : null,
     loss,
-    band: gradeMove(Math.abs(loss)),
+    winLost: g.winLost,
+    accuracy: g.accuracy,
+    band: g.band,
   };
 }
 
@@ -73,13 +73,17 @@ function rankMoves(fen, depth = 4) {
   for (const m of generateLegal(pos)) {
     const after = applyMove(pos, m);
     const post = think(after, depth);
+    const beforeHuman = pre.score;
+    const afterHuman = -post.score;
     scored.push({
       m,
       san: toSan(pos, m),
-      loss: pre.score - (-post.score),      // loss for the mover
+      loss: beforeHuman - afterHuman,          // centipawn loss for the mover
+      winLost: Math.max(0, winPercent(beforeHuman) - winPercent(afterHuman)),
     });
   }
-  scored.sort((a, b) => a.loss - b.loss);
+  // Rank by winning chance given away: that is what the labels are based on.
+  scored.sort((a, b) => a.winLost - b.winLost);
   return scored;
 }
 
@@ -106,8 +110,8 @@ for (const [fen, label] of OPENINGS) {
   const best = ranked[0];
   const worst = ranked[ranked.length - 1];
 
-  const gBest = gradeMove(Math.abs(best.loss));
-  const gWorst = gradeMove(Math.abs(worst.loss));
+  const gBest = gradeMove(best.winLost);
+  const gWorst = gradeMove(worst.winLost);
 
   check(`${label}: the best move is not punished`,
     ORDER[gBest.key] <= 1, `${best.san} loss=${best.loss.toFixed(0)} band=${gBest.key}`);
@@ -126,7 +130,7 @@ console.log('a deliberately terrible move is caught');
   assertLegal(fen);
   const ranked = rankMoves(fen, 4);
   const worst = ranked[ranked.length - 1];
-  const g = gradeMove(Math.abs(worst.loss));
+  const g = gradeMove(worst.winLost);
   check('the worst move here is at least a mistake',
     ORDER[g.key] >= ORDER.mist, `${worst.san} loss=${worst.loss.toFixed(0)} ${g.key}`);
 }
@@ -149,12 +153,33 @@ console.log('the sign convention survives a real blunder');
 
 console.log('grading is monotonic');
 {
-  const keys = [0, 20, 50, 100, 200, 500, 900].map((l) => gradeMove(l).key);
+  // Winning chance given away, in percentage points.
+  const keys = [0, 1, 4, 9, 19, 40].map((l) => gradeMove(l).key);
   let mono = true;
   for (let i = 1; i < keys.length; i++) if (ORDER[keys[i]] < ORDER[keys[i - 1]]) mono = false;
   check('a worse loss never gets a better label', mono, keys.join(' -> '));
   check('losing nothing is "best"', gradeMove(0).key === 'best');
-  check('losing 900 is a blunder', gradeMove(900).key === 'blun');
+  check('losing 40% of win chance is a blunder', gradeMove(40).key === 'blun');
+}
+
+console.log('grading is based on winning chance, not raw centipawns');
+{
+  // The same 200cp costs a lot when the game is level, and almost nothing when
+  // it is already completely won. Any centipawn-based system gets this wrong.
+  const level = gradeFromScores(0, -200);            // level -> two pawns down
+  const won = gradeFromScores(900, 700);             // +9 -> +7, still winning
+  check('losing 200cp from level is at least a mistake',
+    ORDER[level.band.key] >= ORDER.mist, `${level.band.key} (${level.winLost.toFixed(1)}% win)`);
+  check('losing the same 200cp when already winning is not a blunder',
+    ORDER[won.band.key] < ORDER.blun, `${won.band.key} (${won.winLost.toFixed(1)}% win)`);
+  check('the same centipawn loss is graded much worse when level',
+    ORDER[level.band.key] > ORDER[won.band.key],
+    `level=${level.band.key} won=${won.band.key}`);
+  check('winning chance saturates at the extremes',
+    winPercent(0) === 50 && winPercent(2000) > 99 && winPercent(-2000) < 1,
+    `0->${winPercent(0)} 2000->${winPercent(2000).toFixed(2)} -2000->${winPercent(-2000).toFixed(2)}`);
+  check('giving nothing away scores 100% accuracy',
+    moveAccuracy(50, 50) > 99.9, `${moveAccuracy(50, 50).toFixed(2)}`);
 }
 
 console.log('a win held onto is not punished');
