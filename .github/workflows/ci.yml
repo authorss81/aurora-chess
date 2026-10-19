@@ -246,7 +246,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path release\web    | Out-Null
 
           Copy-Item 01-learning-engine\target\release\aurora-engine.exe release\engine\
-Copy-Item 02-fast-app\server.js release\
+          Copy-Item 02-fast-app\web\index.html release\web\
+          Copy-Item 02-fast-app\server.js release\
           Copy-Item 02-fast-app\README.md  release\
           Copy-Item artifacts\aurora-engine-linux\aurora-engine release\engine\aurora-engine-linux
           Copy-Item README.md release\
