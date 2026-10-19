@@ -86,8 +86,18 @@ if ($failed.Count) {
 
 New-Item -ItemType Directory -Force -Path "$Out\artifacts" | Out-Null
 Write-Host ""
+# Clear the target first. `gh run download` merges into an existing directory
+# and will happily leave files from an earlier run in place, so unpacking on top
+# of a previous download gives you a mixture of two builds with no warning. That
+# is how a 2 KB-stale index.html looked like it had the current fixes.
+Get-ChildItem "$Out\artifacts" -Force -ErrorAction SilentlyContinue |
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
 Write-Host "downloading artifacts..." -ForegroundColor Cyan
 gh run download $run.databaseId --dir "$Out\artifacts"
+if ($LASTEXITCODE -ne 0) {
+    throw "gh run download failed"
+}
 
 Write-Host ""
 Write-Host "contents:" -ForegroundColor Cyan
