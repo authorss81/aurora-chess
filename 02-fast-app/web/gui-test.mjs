@@ -12,10 +12,15 @@
 // a classic script with esbuild first.
 
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { JSDOM, VirtualConsole } from 'jsdom';
 
-const WEB = new URL('.', import.meta.url).pathname.replace(/^\//, '').replace(/\/$/, '');
+// fileURLToPath, not URL.pathname: pathname is percent-encoded and on Windows
+// comes back as "/F:/..." with a leading slash that has to be trimmed by hand.
+// Trimming it by hand to make Windows work left CI's Linux path relative
+// ("home/runner/...") and the whole test died with ENOENT.
+const WEB = fileURLToPath(new URL('.', import.meta.url));
 const html = readFileSync(`${WEB}/index.html`, 'utf8');
 const moduleSrc = /<script type="module">([\s\S]*?)<\/script>/.exec(html)[1];
 
