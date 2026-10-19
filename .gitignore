@@ -40,3 +40,9 @@ __pycache__/
 02-fast-app/src-tauri/target/
 02-fast-app/src-tauri/engine/
 02-fast-app/dist/
+
+# Downloaded CI artifacts and unpacked installers. These are build output, not
+# source: the installer alone is ~1.5 MB and changes on every build, so tracking
+# it made every build show up as a large diff and pushed stale copies of the app
+# into the repo where they could be mistaken for the current one.
+dist/

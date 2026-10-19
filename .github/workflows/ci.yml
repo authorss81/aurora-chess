@@ -107,6 +107,13 @@ jobs:
       - name: Coach arrow geometry
         run: node 02-fast-app/web/arrow-test.mjs
 
+      # Drives the real page in a DOM: plays a move, waits for the coach, and
+      # checks the badge and the arrow. This is the only suite that can catch the
+      # app stalling after the first move, which is what a synchronous search at
+      # too deep a setting does to the main thread.
+      - name: Coach in the real page
+        run: node 02-fast-app/web/gui-test.mjs
+
   selfplay:
     name: Self-play (no illegal moves)
     runs-on: ubuntu-latest

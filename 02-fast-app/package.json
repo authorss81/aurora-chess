@@ -10,13 +10,16 @@
     "dev": "tauri dev",
     "stage:engine": "node stage-engine.js",
     "tauri": "tauri",
-    "test": "node web/perft-test.mjs && node web/smoke-test.mjs && node web/coach-test.mjs && node web/arrow-test.mjs",
+    "test": "node web/perft-test.mjs && node web/smoke-test.mjs && node web/coach-test.mjs && node web/arrow-test.mjs && node web/gui-test.mjs",
     "test:arrows": "node web/arrow-test.mjs",
     "test:coach": "node web/coach-test.mjs",
     "test:rules": "node web/perft-test.mjs",
-    "test:smoke": "node web/smoke-test.mjs"
+    "test:smoke": "node web/smoke-test.mjs",
+    "test:gui": "node web/gui-test.mjs"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0"
+    "@tauri-apps/cli": "^2.0.0",
+    "esbuild": "^0.28.2",
+    "jsdom": "^29.1.1"
   }
 }

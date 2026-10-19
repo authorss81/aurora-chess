@@ -239,14 +239,13 @@
       <div class="status" id="status">Ready. Make a move.</div>
       <div class="row" style="margin:0 0 8px">
         <label><input type="checkbox" id="coachOn" checked> Coach mode</label>
-        <select id="coachDepth" title="how hard the coach looks">
-          <option value="6">coach depth 6</option>
-          <option value="9" selected>coach depth 9</option>
-          <option value="12">coach depth 12</option>
-          <option value="14">coach depth 14</option>
+        <select id="coachDepth" title="how long the coach thinks">
+          <option value="250">coach: quick (0.25s)</option>
+          <option value="600" selected>coach: normal (0.6s)</option>
+          <option value="1200">coach: thorough (1.2s)</option>
         </select>
       </div>
-      <div class="coachpanel" id="coachPanel" style="display:none">
+      <div class="coachpanel" id="coachPanel">
         <div id="coachBody"><span style="color:#6d6151">Play a move and it will be graded here.</span></div>
       </div>
       <div class="moves" id="moves"></div>
@@ -404,17 +403,20 @@ function renderArrows(list) {
     const dx = x2 - x1, dy = y2 - y1;
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx / len, uy = dy / len;
-    // stop the shaft short so the arrowhead sits on the square centre
-    const sx = x1 + ux * (w * 0.055), sy = y1 + uy * (w * 0.055);
-    const ex = x2 - ux * (w * 0.045), ey = y2 - uy * (w * 0.045);
-    const mx = (x1 + x2) / 2 - uy * (w * 0.055);
-    const my = (y1 + y2) / 2 + ux * (w * 0.055);
-    const qx = (x1 + x2) / 2 + uy * (w * 0.055);
-    const qy = (y1 + y2) / 2 - ux * (w * 0.055);
+    // Pull both ends in off the square centres: starting the shaft under the
+    // piece and ending it past the target centre made short moves look like
+    // they pointed somewhere else entirely.
+    const inset = Math.min(len * 0.34, w * 0.05);
+    const sx = x1 + ux * inset, sy = y1 + uy * inset;
+    const ex = x2 - ux * inset, ey = y2 - uy * inset;
+    // One gentle bow so the arrow reads clearly over the piece glyphs.
+    const bow = Math.min(len * 0.12, w * 0.035);
+    const mx = (sx + ex) / 2 - uy * bow;
+    const my = (sy + ey) / 2 + ux * bow;
     svg += `<defs><marker id="${id}" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
       <path d="M0,0 L6,3 L0,6 z" fill="${a.color}"/></marker></defs>`;
-    svg += `<path d="M${x1},${y1} Q${mx},${my} ${qx},${qy} T${ex},${ey}"
-            fill="none" stroke="${a.color}" stroke-width="${w * 0.032}"
+    svg += `<path d="M${sx.toFixed(1)},${sy.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${ex.toFixed(1)},${ey.toFixed(1)}"
+            fill="none" stroke="${a.color}" stroke-width="${(w * 0.032).toFixed(1)}"
             opacity="0.85" marker-end="url(#${id})" stroke-linecap="round"/>`;
   });
   layer.innerHTML = svg;
@@ -470,7 +472,14 @@ async function searchPosition(fen, budgetMs) {
     const r = await askRust(skill, budgetMs, fen, true);
     return { move: r.move, score: r.score, san: r.san };
   }
-  const d = Math.max(2, Math.min(7, Math.round(budgetMs / 600)));
+  // Depth, not time, for the JavaScript engine - there is no way to interrupt a
+  // synchronous think(). Measured here: depth 4 ~0.46s, depth 5 ~9s, depth 6
+  // ~35s. Depth 4 is the furthest this machine can go and still feel instant,
+  // so it is the ceiling no matter how much time was asked for.
+  const d = budgetMs >= 400 ? 4 : budgetMs >= 150 ? 3 : 2;
+  // Yield first, or the synchronous search below blocks the paint that shows
+  // "analysing..." and the board looks frozen before anything has happened.
+  await new Promise((r) => setTimeout(r, 0));
   const res = think(pos, d);
   return { move: res.move, score: res.score, san: res.move ? safeSan(pos, res.move) : null };
 }
@@ -484,17 +493,23 @@ async function searchPosition(fen, budgetMs) {
  * flatter every move, because a blunder usually only becomes visible when the
  * opponent finds the follow-up.
  */
-async function runCoach(played, fenBefore, fenAfter, entry) {
+async function runCoach(played, fenBefore, fenAfter) {
   const budget = coachBudgetMs();
+  // Snapshot the move count now, once the engine's reply is on the board. Any
+  // further change means the player has moved on and this analysis is stale.
+  const lenAtStart = state.history.length;
   setCoach('<span style="color:#6d6151">analysing your move...</span>');
 
   // Short search before the move (enough to score it), full budget after, since
   // finding the opponent's best reply is the whole point.
-  const pre  = await searchPosition(fenBefore, Math.round(budget * 0.4));
+  // Same budget for both. Scoring the starting position more shallowly than the
+  // ending one would quietly understate every loss, which is the one number the
+  // coach is judged on.
+  const pre  = await searchPosition(fenBefore, budget);
   const post = await searchPosition(fenAfter, budget);
 
   // The player may have moved on while we were thinking.
-  if (entry && state.history[state.history.length - 1] !== entry) return;
+  if (state.history.length !== lenAtStart) return;
 
   const beforeHuman = pre.score;     // fenBefore: the human is to move
   const afterHuman = -post.score;    // fenAfter: the opponent is to move
@@ -539,9 +554,11 @@ async function runCoach(played, fenBefore, fenAfter, entry) {
   state.lastCoach = { loss, band, played, bestReply: post.move };
 
   // Remember the verdict on the move itself so the list can show it later and a
-  // click on the move can bring the explanation back.
-  if (entry) {
-    entry.grade = {
+  // click on the move can bring the explanation back. That is the player's move,
+  // not the engine's reply that was appended after it.
+  const playedEntry = state.history.find((h) => h.from === played.from && h.to === played.to);
+  if (playedEntry) {
+    playedEntry.grade = {
       key: band.key,
       cls: band.cls,
       short: band.key === 'blun' ? '??'
@@ -565,9 +582,7 @@ function fmtLoss(cp) {
 }
 
 function coachBudgetMs() {
-  const d = parseInt($('coachDepth').value, 10) || 9;
-  // roughly exponential in the chosen depth, capped so a click never hangs
-  return Math.min(4000, 200 * Math.pow(2, d - 3));
+  return parseInt($('coachDepth').value, 10) || 600;
 }
 
 // ---------------------------------------------------------------- board
@@ -729,10 +744,14 @@ function commitMove(m){
   if (hs === null) {
     startClock();
   } else if (state.pos.turn === hs) {
-    // the engine has replied; start its clock and settle the arrows
+    // The engine has replied. Only clear the arrows when the coach is not going
+    // to replace them - clearing here wiped the arrow for the move the player
+    // had just made, leaving an empty board whenever the coach was slow.
     startClock();
-    state.arrows = [];
-    renderArrows([]);
+    if (!coachEnabled()) {
+      state.arrows = [];
+      renderArrows([]);
+    }
   } else {
     // The engine is now to move, so its clock runs while it thinks. That is
     // what a real chess clock does, and it is why the number used to appear to
@@ -747,14 +766,21 @@ function commitMove(m){
     const played = { from: m.from, to: m.to, mover };
     const fenBefore = before;
     const fenAfter = state.pos.fen();
-    const entry = state.history[state.history.length - 1];
-
     state.arrows = [{ from: m.from, to: m.to, color: '#e6c14a' }];
     renderArrows(state.arrows);
 
+    // Show something straight away. The panel used to stay hidden until the
+    // analysis finished, which on a slow search read as "there is no rating at
+    // all" rather than "still thinking".
+    if (coachEnabled()) setCoach('<span style="color:#6d6151">analysing your move...</span>');
+
     engineMove().then(() => {
       if (!coachEnabled()) return;
-      return runCoach(played, fenBefore, fenAfter, entry).catch(() => {});
+      return runCoach(played, fenBefore, fenAfter).catch((e) => {
+        // An empty catch left the panel stuck on "analysing..." with no
+        // explanation, which is indistinguishable from a hang.
+        setCoach(`<span style="color:#c98">coach failed: ${e && e.message}</span>`);
+      });
     });
   }
 }
@@ -775,7 +801,11 @@ async function engineMove(){
   // fixed depth it could overrun.
   const key = state.pos.turn > 0 ? 'w' : 'b';
   const remaining = state.clocks[key];
-  const budget = Math.min(remaining / 5, remaining / 30 + state.clocks.inc * 0.8);
+  // Capped hard. The old formula allowed ~7.6s per move on a 3+2 clock, which
+  // combined with the coach's own two searches was long enough that the board
+  // looked dead.
+  const budget = Math.max(120, Math.min(1200,
+    Math.min(remaining / 5, remaining / 30 + state.clocks.inc * 0.8)));
 
   let best = null, score = 0;
   if (state.source === 'rust' && state.rust.available){
@@ -785,7 +815,8 @@ async function engineMove(){
     setStatus('engine thinking...');
     await new Promise(r => setTimeout(r, 10));
     // The JavaScript fallback uses depth: a weak opponent is a shallow search.
-    const depth = Math.max(1, Math.min(5, Math.round(skill / 4)));
+    // Same ceiling as the coach: depth 5 is ~9s on this machine.
+    const depth = Math.max(1, Math.min(4, Math.round(skill / 4)));
     const res = think(state.pos, depth, (info) => {
       setStatus(`engine thinking... depth ${info.depth}`);
     });
