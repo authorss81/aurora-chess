@@ -21,14 +21,21 @@
 param(
     [string]$Out = "$PWD\dist",
     [switch]$KeepZip,
-    [int]$TimeoutMinutes = 45
+    [int]$TimeoutMinutes = 45,
+    [long]$RunId
 )
 
 $ErrorActionPreference = 'Stop'
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     throw "the GitHub CLI (gh) is required: https://cli.github.com"
 }
-if (-not (Get-Command gh auth status -ErrorAction SilentlyContinue)) { }
+# `Get-Command gh auth status` does NOT work the way it looks: everything after
+# the command name is passed as an argument list, which is an error. Call gh and
+# test its exit code instead.
+gh auth status *> $null
+if ($LASTEXITCODE -ne 0) {
+    throw "gh is not authenticated. run: gh auth login"
+}
 
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
@@ -37,12 +44,26 @@ Write-Host "waiting for a CI run to finish..." -ForegroundColor Cyan
 $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
 $run = $null
 do {
-    Start-Sleep -Seconds 20
-    $run = gh run list --workflow CI --limit 1 --json status,conclusion,databaseId,url |
-        ConvertFrom-Json | Select-Object -First 1
-    if (-not $run) { continue }
-    Write-Host ("  {0,-9} {1}" -f $run.status, $run.url)
-} while ($run.status -ne 'completed' -and (Get-Date) -lt $deadline)
+    if ($RunId) {
+        # Targeting a specific run: report it without polling for "the latest",
+        # which may already be a newer push by the time this runs.
+        $run = gh run view $RunId --json status,conclusion,databaseId,url |
+            ConvertFrom-Json
+        if ($run -and $run.status -ne 'completed' -and (Get-Date) -ge $deadline) {
+            throw "timed out waiting for run $RunId"
+        }
+    } else {
+        Start-Sleep -Seconds 20
+        $run = gh run list --workflow CI --limit 1 --json status,conclusion,databaseId,url |
+            ConvertFrom-Json | Select-Object -First 1
+        if (-not $run) { continue }
+        if ($run.status -ne 'completed' -and (Get-Date) -ge $deadline) {
+            throw "timed out waiting for CI"
+        }
+    }
+    if ($run) { Write-Host ("  {0,-9} {1}" -f $run.status, $run.url) }
+    if (-not $run -or $run.status -ne 'completed') { Start-Sleep -Seconds 15 }
+} while (-not $run -or $run.status -ne 'completed')
 
 if (-not $run -or $run.status -ne 'completed') {
     throw "timed out waiting for CI"
@@ -87,6 +108,15 @@ foreach ($i in $installers) {
     Write-Host "installer: $($i.FullName)" -ForegroundColor Green
 }
 
-if (-not $KeepZip) { }
+# gh run download leaves one archive per job. They are large and never needed
+# once unpacked, so drop them unless the caller asked to keep them.
+if (-not $KeepZip) {
+    Get-ChildItem "$Out\artifacts" -Recurse -Filter *.zip -File |
+        ForEach-Object {
+            Write-Host "removing $($_.Name) (use -KeepZip to keep it)" -ForegroundColor DarkGray
+            Remove-Item $_.FullName -Force
+        }
+}
+
 Write-Host ""
 Write-Host "done. double-click the .exe to install, or run the extracted folder directly." -ForegroundColor Green
